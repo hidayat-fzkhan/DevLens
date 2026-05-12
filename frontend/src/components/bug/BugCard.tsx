@@ -8,11 +8,13 @@ import {
   Typography,
 } from "@mui/material";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
+import { useState } from "react";
 import type { ApiTicket } from "../../types";
 import { AIAnalysis } from "./AIAnalysis";
 import { BugDetails } from "./BugDetails";
 import { ImplementationPrompt } from "./ImplementationPrompt";
 import { ErrorMessage } from "../common/ErrorMessage";
+import { RepoSelector } from "../repos/RepoSelector";
 
 type BugCardProps = Readonly<{
   bug: ApiTicket;
@@ -22,7 +24,8 @@ type BugCardProps = Readonly<{
   analysisError?: string | null;
   promptLoading?: boolean;
   promptError?: string | null;
-  onGeneratePrompt?: (ticketId: number, guidance?: string) => void;
+  onAnalyze?: (ticketId: number, repoIds: string[]) => void;
+  onGeneratePrompt?: (ticketId: number, repoIds: string[], guidance?: string) => void;
 }>;
 
 function getStateBorderColor(state?: string): string {
@@ -42,12 +45,16 @@ export function BugCard({
   analysisError = null,
   promptLoading = false,
   promptError = null,
+  onAnalyze,
   onGeneratePrompt,
 }: BugCardProps) {
   const isBug = bug.category === "bugs";
   const showImplementationPrompt =
     isDetailed && !isBug && bug.aiAnalysis?.status === "ready";
   const borderColor = getStateBorderColor(bug.state);
+  const [selectedRepoIds, setSelectedRepoIds] = useState<string[]>([]);
+  const showRepoSelector =
+    isDetailed && !bug.aiAnalysis && !analysisLoading && !analysisError;
 
   return (
     <Card
@@ -74,6 +81,18 @@ export function BugCard({
             </Box>
           )}
 
+          {showRepoSelector && (
+            <RepoSelector
+              analyzeLabel={isBug ? "Analyze Bug" : "Analyze Story"}
+              onSelectionChange={setSelectedRepoIds}
+              onAnalyze={(repoIds) => {
+                setSelectedRepoIds(repoIds);
+                onAnalyze?.(bug.id, repoIds);
+              }}
+              disabled={analysisLoading}
+            />
+          )}
+
           {isDetailed && analysisLoading && (
             <Stack direction="row" spacing={1.5} alignItems="center" sx={{ py: 1 }}>
               <CircularProgress size={18} thickness={4} />
@@ -98,7 +117,9 @@ export function BugCard({
               prompt={bug.implementationPrompt}
               loading={promptLoading}
               error={promptError}
-              onGenerate={(guidance) => onGeneratePrompt?.(bug.id, guidance)}
+              onGenerate={(guidance) =>
+                onGeneratePrompt?.(bug.id, selectedRepoIds, guidance)
+              }
             />
           )}
         </Stack>

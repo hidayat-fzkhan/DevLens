@@ -19,6 +19,9 @@ build/
 .env.local
 .env.*.local
 
+# Runtime data
+backend/data/
+
 # IDE
 .vscode/
 .idea/

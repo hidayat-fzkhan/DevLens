@@ -145,6 +145,7 @@ export type AIAnalysisParams = {
     sha: string;
     message: string;
     files: string[];
+    repo?: string;
   }>;
   anthropicKey: string;
   anthropicModel: string;
@@ -195,7 +196,7 @@ function buildBugPrompt(params: {
         "Rules:",
         "- Keep summary to 2 sentences max.",
         "- likelyCause should be one short paragraph.",
-        "- suspectCommits must contain at most 3 SHA prefixes from the provided commit list.",
+        "- suspectCommits must contain at most 3 SHA prefixes from the provided commit list. Use the bare SHA prefix (the repo is implied by the [repo] tag in the commits list).",
         "- recommendations must contain at most 3 short, concrete actions.",
         "- importantPoints must contain at most 3 short bullets.",
         "- Use empty strings or arrays for story-only fields.",
@@ -405,10 +406,15 @@ export async function analyzeWithAI(
 ): Promise<AIAnalysisResult> {
   const commitsText = params.recentCommits
     .slice(0, MAX_COMMITS)
-    .map(
-      (c) =>
-        `${c.sha.slice(0, 8)} | ${truncate(c.message.replaceAll(/\s+/g, " ").trim(), MAX_COMMIT_MESSAGE_CHARS)} | ${c.files.slice(0, MAX_FILES_PER_COMMIT).join(", ")}`,
-    )
+    .map((c) => {
+      const repoPrefix = c.repo ? `[${c.repo}] ` : "";
+      const message = truncate(
+        c.message.replaceAll(/\s+/g, " ").trim(),
+        MAX_COMMIT_MESSAGE_CHARS,
+      );
+      const files = c.files.slice(0, MAX_FILES_PER_COMMIT).join(", ");
+      return `${repoPrefix}${c.sha.slice(0, 8)} | ${message} | ${files}`;
+    })
     .join("\n\n");
 
   const ticketDescription = compactText(

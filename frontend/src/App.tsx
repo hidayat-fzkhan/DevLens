@@ -7,6 +7,7 @@ import { BugList } from "./components/bug/BugList";
 import { EmptyState } from "./components/common/EmptyState";
 import { ErrorMessage } from "./components/common/ErrorMessage";
 import { Layout } from "./components/layout/Layout";
+import { RepoManager } from "./components/repos/RepoManager";
 import { SearchBar } from "./components/search/SearchBar";
 import { useTickets } from "./hooks/useBugs";
 import type { TicketCategory } from "./types";
@@ -89,6 +90,7 @@ export default function App() {
     load,
     reset,
     handleStop,
+    runAnalysis,
     loadImplementationPrompt,
   } = useTickets(currentCategory);
 
@@ -250,6 +252,8 @@ export default function App() {
           </CardContent>
         </Card>
       </Stack>
+
+      <RepoManager />
     </Stack>
   );
 
@@ -298,6 +302,7 @@ export default function App() {
                 analysisError={analysisError}
                 promptLoading={promptLoading}
                 promptError={promptError}
+                onAnalyze={runAnalysis}
                 onGeneratePrompt={loadImplementationPrompt}
               />
             )}

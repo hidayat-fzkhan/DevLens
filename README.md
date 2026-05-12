@@ -12,7 +12,7 @@ The current product supports two main workflows:
 ## Current Highlights
 
 - Separate UI flows for Bugs and User Stories
-- Welcome page with direct navigation to each category
+- Welcome page with direct navigation to each category and a **repo manager** for adding/removing GitHub repositories without restarting the server
 - Route-based deep links:
   - `/`
   - `/bugs`
@@ -20,11 +20,13 @@ The current product supports two main workflows:
   - `/user-stories`
   - `/user-stories/analyze/:id`
 - Azure DevOps filtering driven by config values in `backend/.env`
+- **Multi-repo analysis**: pick which configured GitHub repos to analyze each ticket against; commits and code context fan out across all selected repos in parallel
 - Anthropic-powered AI analysis using live GitHub repository context
 - Fast-first analysis flow with deep repository context only when needed
 - Implementation prompt generation for User Stories (produces a prompt ready to paste into an AI coding assistant)
-- In-memory analysis caching keyed by ticket content, branch head, and model
+- In-memory analysis caching keyed by ticket content, every selected repo's branch head, and the model
 - Timing logs for commit fetch, repo-context fetch, model calls, and total analysis time
+- Modular Express backend (`routes/`, `services/`, `middleware/`) with a central error handler
 
 ## Features
 
@@ -70,16 +72,31 @@ The current product supports two main workflows:
 devlens/
 ├── backend/
 │   ├── package.json
+│   ├── nodemon.json
 │   └── src/
-│       ├── ado.ts          # Azure DevOps WIQL queries and work item mapping
-│       ├── ai.ts           # Anthropic prompt building and AI result normalization
-│       ├── config.ts       # Environment/config loader
-│       ├── github.ts       # GitHub commit fetching and repo-context extraction
-│       ├── http.ts         # Shared HTTP helpers
-│       ├── rank.ts         # Legacy heuristic ranking helper
-│       ├── server.ts       # Express API routes and analysis orchestration
-│       ├── text.ts         # Text cleanup and truncation helpers
-│       └── types.ts        # Backend domain types
+│       ├── server.ts                              # entry: app.listen
+│       ├── app.ts                                 # Express composition
+│       ├── routes/
+│       │   ├── query.ts                           # shared query-param parsers
+│       │   ├── workItems.ts                       # /api/{bugs|user-stories}[/analysis]
+│       │   ├── implementationPrompt.ts            # user-story impl-prompt route
+│       │   └── repos.ts                           # /api/repos CRUD
+│       ├── services/
+│       │   ├── cache.ts                           # generic TtlCache<T>
+│       │   ├── workItemMapper.ts                  # response shaping + fingerprint
+│       │   ├── analysisService.ts                 # two-stage multi-repo orchestrator
+│       │   └── implementationPromptService.ts     # impl-prompt orchestrator
+│       ├── middleware/
+│       │   └── errorHandler.ts                    # HttpError + asyncHandler + central errors
+│       ├── ado.ts                                 # Azure DevOps WIQL + mapping
+│       ├── ai.ts                                  # Anthropic prompt building
+│       ├── github.ts                              # GitHub commits + repo-context (single repo)
+│       ├── repos.ts                               # persisted repo store
+│       ├── config.ts                              # env loader
+│       ├── http.ts                                # fetch wrapper
+│       ├── rank.ts                                # commit-scoring helper
+│       ├── text.ts                                # text utilities
+│       └── types.ts                               # shared types
 ├── frontend/
 │   ├── package.json
 │   └── src/
@@ -93,6 +110,9 @@ devlens/
 │       │   │   ├── BugDetails.tsx
 │       │   │   ├── BugList.tsx
 │       │   │   └── ImplementationPrompt.tsx
+│       │   ├── repos/
+│       │   │   ├── RepoManager.tsx                # home-page CRUD
+│       │   │   └── RepoSelector.tsx               # ticket-detail multi-select
 │       │   ├── common/
 │       │   │   ├── EmptyState.tsx
 │       │   │   └── ErrorMessage.tsx
@@ -102,9 +122,9 @@ devlens/
 │       │   └── search/
 │       │       └── SearchBar.tsx
 │       ├── hooks/
-│       │   └── useBugs.ts  # Category-aware ticket loading hook
+│       │   └── useBugs.ts                         # ticket + analysis + prompt state
 │       ├── services/
-│       │   └── api.ts
+│       │   └── api.ts                             # typed fetch client (incl. /api/repos)
 │       ├── types/
 │       │   └── index.ts
 │       └── utils/
@@ -117,23 +137,27 @@ devlens/
 └── README.md
 ```
 
+Runtime data (`backend/data/repos.json`) is created on first run and gitignored.
+
 ## Architecture Chart
 
 ```mermaid
 flowchart LR
     UI[Browser UI] --> FE[React + Vite Frontend]
-    FE -->|List and analysis requests| API[Express Backend API]
+    FE -->|List, repos CRUD, analysis with selected repoIds| API[Express Backend API]
 
     API -->|WIQL + work item fetch| ADO[Azure DevOps / TFS]
-    API -->|Recent commits| GHCommits[GitHub Commits API]
+    API -->|Recent commits per selected repo| GHCommits[GitHub Commits API]
+    API --> RepoStore[(backend/data/repos.json)]
     API --> Cache[(In-memory Analysis Cache)]
-    API -->|Deep pass only when needed| GHContext[GitHub Tree and Blob APIs]
+    API -->|Deep pass only when needed, per repo| GHContext[GitHub Tree and Blob APIs]
     API --> AI[Anthropic Claude]
 
     ADO --> API
     GHCommits --> API
     GHContext --> API
     Cache --> API
+    RepoStore --> API
     AI --> API
 
     FE -->|Routes| Routes[/, /bugs, /bugs/analyze/:id, /user-stories, /user-stories/analyze/:id]
@@ -160,59 +184,85 @@ Only the Azure DevOps work item type changes by category:
 - Bugs page: `Bug`, `Defect`
 - User Stories page: `User Story`
 
-### 2. Ticket Analysis Fetch
+### 2. Configuring Repositories
 
-When the user opens a ticket detail page, the frontend calls one of:
+Before analyzing a ticket, the user adds the GitHub repositories that should be considered. The home page contains a **Repo Manager** card that calls:
 
-- `GET /api/bugs/:ticketId/analysis`
-- `GET /api/user-stories/:ticketId/analysis`
+- `GET /api/repos` — list configured repos
+- `POST /api/repos` `{ url, branch }` — add one
+- `DELETE /api/repos/:id` — remove one
+
+Repos are persisted to `backend/data/repos.json` and survive restarts. The store starts empty on first run; add your first repo through the UI before running analysis. `GITHUB_TOKEN` is always read from env and never written to disk.
+
+### 3. Ticket Analysis Fetch
+
+When the user opens a ticket detail page, the frontend loads the work item, then renders a **Repo Selector** with checkboxes of all configured repos. The user picks one or more and clicks "Analyze". The frontend then calls one of:
+
+- `GET /api/bugs/:ticketId/analysis?repoIds=<id1>,<id2>`
+- `GET /api/user-stories/:ticketId/analysis?repoIds=<id1>,<id2>`
 
 The backend then:
 
-1. Reads the current Azure DevOps work item
-2. Normalizes description, repro steps, and acceptance criteria
-3. Fetches recent commits from the configured GitHub branch
-4. Runs a fast AI pass without deep repo snippets
-5. Fetches GitHub repo context only if the fast result needs more signal
-6. Runs a deep AI pass only when necessary
-7. Caches the final result in memory
+1. Resolves `repoIds` against the persisted store (`findReposByIds`)
+2. Reads the current Azure DevOps work item
+3. Normalizes description, repro steps, and acceptance criteria
+4. **Fans out commit fetches across every selected repo in parallel**, tagging each commit with its `[owner/name]` label so the model can attribute them
+5. Runs a fast AI pass without deep repo snippets
+6. **Fans out repo-context fetches per repo** only if the fast result needs more signal; merges sections with `### Repo: owner/name` headers
+7. Runs a deep AI pass only when necessary
+8. Caches the final result in memory under a key that includes every selected repo's branch head
 
-### 3. Implementation Prompt Generation
+Missing or unknown `repoIds` returns `400 { "error": "Select at least one repository before running analysis." }`.
 
-When the user clicks "Generate Implementation Prompt" on a User Story detail page, the frontend calls:
+### 4. Implementation Prompt Generation
+
+When the user clicks "Generate Implementation Prompt" on a User Story detail page, the frontend reuses the same repo selection and calls:
 
 ```
-GET /api/user-stories/:ticketId/implementation-prompt
+GET /api/user-stories/:ticketId/implementation-prompt?repoIds=<id1>,<id2>
 ```
 
 The backend:
 
-1. Reuses a cached analysis result if one exists; otherwise runs the full two-stage analysis
+1. Reuses a cached analysis result if one exists (same `repoIds`); otherwise fetches fresh per-repo context
 2. Builds a structured prompt that includes work item details, analysis findings, repo snippets, and any `additionalGuidance` query param
 3. Calls Claude (max 1 800 output tokens) to produce the final prompt text
 4. Caches the result under the same composite key as analysis
 5. Returns the prompt as plain text for copy-paste into any AI coding assistant
 
-### 4. Cache Behavior
+### 5. Cache Behavior
 
 Analysis cache keys include:
 
 - work item category
 - ticket id
-- GitHub branch head SHA
+- **aggregate head SHA** — sorted, joined `repoId:head8` for every selected repo
 - selected Anthropic model
 - a fingerprint of the current work item content
 
 That means the cache invalidates naturally when:
 
-- the ticket description changes
-- acceptance criteria change
-- repro steps change
-- title or state changes
-- the branch head changes
+- the ticket description, acceptance criteria, repro steps, title, or state changes
+- any selected repo's branch head changes
+- **the user changes the repo selection** (different repos → different aggregate SHA → cache miss)
 - the selected model changes
 
 ## API Endpoints
+
+### Repos
+
+```bash
+# List configured repos
+curl http://localhost:4000/api/repos
+
+# Add a repo
+curl -X POST http://localhost:4000/api/repos \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://github.com/owner/repo","branch":"main"}'
+
+# Remove a repo
+curl -X DELETE http://localhost:4000/api/repos/<id>
+```
 
 ### Bugs
 
@@ -223,8 +273,8 @@ curl http://localhost:4000/api/bugs
 # Load a specific bug/defect by ID
 curl "http://localhost:4000/api/bugs?ticketId=12345"
 
-# Run AI analysis for a specific bug/defect
-curl http://localhost:4000/api/bugs/12345/analysis
+# Run AI analysis for a specific bug/defect (repoIds is required)
+curl "http://localhost:4000/api/bugs/12345/analysis?repoIds=<id1>,<id2>"
 ```
 
 ### User Stories
@@ -236,12 +286,12 @@ curl http://localhost:4000/api/user-stories
 # Load a specific user story by ID
 curl "http://localhost:4000/api/user-stories?ticketId=12345"
 
-# Run AI analysis for a specific user story
-curl http://localhost:4000/api/user-stories/12345/analysis
+# Run AI analysis for a specific user story (repoIds is required)
+curl "http://localhost:4000/api/user-stories/12345/analysis?repoIds=<id1>,<id2>"
 
-# Generate an implementation prompt (optionally pass extra guidance)
-curl "http://localhost:4000/api/user-stories/12345/implementation-prompt"
-curl "http://localhost:4000/api/user-stories/12345/implementation-prompt?additionalGuidance=Use+the+existing+service+layer"
+# Generate an implementation prompt (repoIds is required, additional guidance optional)
+curl "http://localhost:4000/api/user-stories/12345/implementation-prompt?repoIds=<id1>,<id2>"
+curl "http://localhost:4000/api/user-stories/12345/implementation-prompt?repoIds=<id1>&additionalGuidance=Use+the+existing+service+layer"
 ```
 
 ## Quick Start
@@ -276,8 +326,8 @@ ADO_PROJECT=my-project
 ADO_PAT=***
 
 # GitHub
-GITHUB_REPO=https://github.com/owner/repo
-GITHUB_REPO_BRANCH=main
+# Repositories are managed in the UI (Home page → Repo Manager) and persisted
+# to backend/data/repos.json. Only the token is read from env.
 GITHUB_TOKEN=ghp_***
 
 # Optional Azure filters
@@ -340,22 +390,20 @@ Open `http://localhost:5173`.
 | `ADO_ORG`            | Azure DevOps organization or full base URL    |
 | `ADO_PROJECT`        | Azure DevOps project name                     |
 | `ADO_PAT`            | Azure DevOps PAT token                        |
-| `GITHUB_REPO`        | GitHub repo as `owner/repo` or full URL       |
-| `GITHUB_REPO_BRANCH` | Branch used for commit and repo-context reads |
 | `ANTHROPIC_KEY`      | Anthropic API key                             |
 
 ### Optional Environment Variables
 
-| Variable          | Default             | Description                                                |
-| ----------------- | ------------------- | ---------------------------------------------------------- |
-| `ADO_DAYS`        | `7`                 | Number of days of Azure DevOps tickets to query            |
-| `ADO_TOP`         | `10`                | Maximum number of list results                             |
-| `ADO_STATES`      | `New,Active`        | Azure DevOps states to include                             |
-| `ADO_AREA_PATH`   | unset               | Optional Azure area-path filter                            |
-| `GITHUB_TOKEN`    | unset               | Recommended for private repos and higher GitHub API limits |
-| `GITHUB_COMMITS`  | `50`                | Max recent commits to inspect before analysis narrowing    |
-| `API_PORT`        | `4000`              | Backend port                                               |
-| `ANTHROPIC_MODEL` | `claude-sonnet-4-6` | Default model for interactive analysis                     |
+| Variable             | Default             | Description                                                                                                          |
+| -------------------- | ------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `GITHUB_TOKEN`       | unset               | Always read from env (never persisted). Recommended for private repos and higher GitHub API limits.                  |
+| `ADO_DAYS`           | `7`                 | Number of days of Azure DevOps tickets to query                                                                      |
+| `ADO_TOP`            | `10`                | Maximum number of list results                                                                                       |
+| `ADO_STATES`         | `New,Active`        | Azure DevOps states to include                                                                                       |
+| `ADO_AREA_PATH`      | unset               | Optional Azure area-path filter                                                                                      |
+| `GITHUB_COMMITS`     | `50`                | Upper bound on commits inspected per analysis (scaled per repo when multiple are selected)                           |
+| `API_PORT`           | `4000`              | Backend port                                                                                                         |
+| `ANTHROPIC_MODEL`    | `claude-sonnet-4-6` | Default model for interactive analysis                                                                               |
 
 ## AI Analysis Design
 

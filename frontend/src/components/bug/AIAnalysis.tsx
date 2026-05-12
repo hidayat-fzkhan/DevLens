@@ -257,7 +257,12 @@ export function AIAnalysis({ analysis }: AIAnalysisProps) {
               >
                 <Stack spacing={0.5}>
                   {analysis.suspectCommits.map((commit) => (
-                    <Typography key={commit.sha} variant="body2" sx={{ fontFamily: "monospace", fontSize: 12 }}>
+                    <Typography key={`${commit.repo ?? ""}:${commit.sha}`} variant="body2" sx={{ fontFamily: "monospace", fontSize: 12 }}>
+                      {commit.repo && (
+                        <Box component="span" sx={{ mr: 1, color: "text.secondary", fontFamily: "inherit", fontSize: 12 }}>
+                          [{commit.repo}]
+                        </Box>
+                      )}
                       {commit.url ? (
                         <Box
                           component="a"

@@ -10,7 +10,8 @@ type BugListProps = Readonly<{
   analysisError?: string | null;
   promptLoading?: boolean;
   promptError?: string | null;
-  onGeneratePrompt?: (ticketId: number) => void;
+  onAnalyze?: (ticketId: number, repoIds: string[]) => void;
+  onGeneratePrompt?: (ticketId: number, repoIds: string[], guidance?: string) => void;
 }>;
 
 export function BugList({
@@ -21,29 +22,28 @@ export function BugList({
   analysisError,
   promptLoading,
   promptError,
+  onAnalyze,
   onGeneratePrompt,
 }: BugListProps) {
   return (
     <Stack spacing={3}>
-      {bugs.map((bug) => (
-        <BugCard
-          key={bug.id}
-          bug={bug}
-          isDetailed={selectedBugId === bug.id && bugs.length === 1}
-          onOpenBug={onOpenBug}
-          analysisLoading={
-            selectedBugId === bug.id && bugs.length === 1
-              ? analysisLoading
-              : false
-          }
-          analysisError={
-            selectedBugId === bug.id && bugs.length === 1 ? analysisError : null
-          }
-          promptLoading={selectedBugId === bug.id && bugs.length === 1 ? promptLoading : false}
-          promptError={selectedBugId === bug.id && bugs.length === 1 ? promptError : null}
-          onGeneratePrompt={onGeneratePrompt}
-        />
-      ))}
+      {bugs.map((bug) => {
+        const isActive = selectedBugId === bug.id && bugs.length === 1;
+        return (
+          <BugCard
+            key={bug.id}
+            bug={bug}
+            isDetailed={isActive}
+            onOpenBug={onOpenBug}
+            analysisLoading={isActive ? analysisLoading : false}
+            analysisError={isActive ? analysisError : null}
+            promptLoading={isActive ? promptLoading : false}
+            promptError={isActive ? promptError : null}
+            onAnalyze={onAnalyze}
+            onGeneratePrompt={onGeneratePrompt}
+          />
+        );
+      })}
     </Stack>
   );
 }

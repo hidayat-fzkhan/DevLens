@@ -6,13 +6,13 @@ Planned improvements and feature ideas for DevLens.
 
 ## 1. Repo and Azure Team Configuration from the UI
 
-Currently, GitHub repos and Azure DevOps team/area settings are configured entirely through `backend/.env`. There is no way to change them without restarting the server.
+**Status:** Partially shipped. GitHub repositories are now managed entirely from the UI (Home page → Repo Manager) and persisted to `backend/data/repos.json`. Each ticket analysis lets the user pick which configured repos to fan out across. Azure DevOps area/team settings are still env-only.
 
-**Proposed work:**
-- Add a Settings page in the frontend where users can add, edit, and remove GitHub repositories and Azure DevOps teams/area paths.
-- Store configuration in a persistent layer (e.g., a local JSON file or a lightweight database) so changes survive server restarts.
-- Allow per-category repo overrides — for example, point the Bugs page at one repo and the User Stories page at another.
+**Remaining work:**
+- Manage Azure DevOps teams/area paths from the UI the same way repos are managed today.
+- Per-category repo presets — e.g., default Bugs to one set of repos and User Stories to another.
 - Validate connections on save (test the ADO PAT and GitHub token before persisting).
+- Edit-in-place for existing repo entries (today it's add/remove only).
 
 ---
 

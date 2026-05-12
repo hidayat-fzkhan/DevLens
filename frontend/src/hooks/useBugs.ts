@@ -21,9 +21,13 @@ export function useTickets(category: TicketCategory | null) {
   const analysisAbortControllerRef = useRef<AbortController | null>(null);
   const promptAbortControllerRef = useRef<AbortController | null>(null);
 
-  const loadAnalysis = useCallback(
-    async (ticketId: number) => {
+  const runAnalysis = useCallback(
+    async (ticketId: number, repoIds: string[]) => {
       if (!category) {
+        return;
+      }
+      if (repoIds.length === 0) {
+        setAnalysisError("Select at least one repository before running analysis.");
         return;
       }
 
@@ -40,6 +44,7 @@ export function useTickets(category: TicketCategory | null) {
         const data = await fetchTicketAnalysis(
           category,
           ticketId,
+          repoIds,
           controller.signal,
         );
         setTickets((currentTickets) =>
@@ -71,7 +76,12 @@ export function useTickets(category: TicketCategory | null) {
   );
 
   const loadImplementationPrompt = useCallback(
-    async (ticketId: number, guidance?: string) => {
+    async (ticketId: number, repoIds: string[], guidance?: string) => {
+      if (repoIds.length === 0) {
+        setPromptError("Select at least one repository before generating the prompt.");
+        return;
+      }
+
       if (promptAbortControllerRef.current) {
         promptAbortControllerRef.current.abort();
       }
@@ -84,6 +94,7 @@ export function useTickets(category: TicketCategory | null) {
       try {
         const data = await fetchImplementationPrompt(
           ticketId,
+          repoIds,
           controller.signal,
           guidance,
         );
@@ -162,9 +173,6 @@ export function useTickets(category: TicketCategory | null) {
         const data = await fetchTickets(category, ticketId, controller.signal);
         setTickets(data.tickets);
         setGeneratedAt(data.generatedAt);
-        if (ticketId && data.tickets.length === 1) {
-          void loadAnalysis(data.tickets[0].id);
-        }
       } catch (err) {
         if (err instanceof Error && err.name === "AbortError") {
           setError("Request cancelled");
@@ -178,7 +186,7 @@ export function useTickets(category: TicketCategory | null) {
         }
       }
     },
-    [category, loadAnalysis, reset],
+    [category, reset],
   );
 
   const handleStop = () => {
@@ -208,6 +216,7 @@ export function useTickets(category: TicketCategory | null) {
     load,
     reset,
     handleStop,
+    runAnalysis,
     loadImplementationPrompt,
   };
 }

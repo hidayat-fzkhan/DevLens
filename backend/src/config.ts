@@ -8,8 +8,6 @@ export type Config = {
   adoTop: number;
   adoStates: string[];
   adoAreaPath?: string;
-  githubRepo: string;
-  githubRepoBranch: string;
   githubToken?: string;
   githubCommits: number;
   anthropicKey: string;
@@ -53,8 +51,6 @@ export function loadConfig(partial?: Partial<Config>): Config {
   const adoProject = partial?.adoProject ?? requireEnv("ADO_PROJECT");
   const adoPat = partial?.adoPat ?? requireEnv("ADO_PAT");
 
-  const githubRepo = partial?.githubRepo ?? requireEnv("GITHUB_REPO");
-  const githubRepoBranch = partial?.githubRepoBranch ?? requireEnv("GITHUB_REPO_BRANCH");
   const githubToken = partial?.githubToken ?? envOptional("GITHUB_TOKEN");
   const anthropicKey = partial?.anthropicKey ?? requireEnv("ANTHROPIC_KEY");
   const anthropicModel = partial?.anthropicModel ?? envOptional("ANTHROPIC_MODEL") ?? "claude-sonnet-4-6";
@@ -65,10 +61,8 @@ export function loadConfig(partial?: Partial<Config>): Config {
     adoPat,
     adoDays: partial?.adoDays ?? envNumber("ADO_DAYS", 7),
     adoTop: partial?.adoTop ?? envNumber("ADO_TOP", 10),
-    adoStates: partial?.adoStates ?? envCsv("ADO_STATES", ["New", "Active"]),
+    adoStates: partial?.adoStates ?? envCsv("ADO_STATES", ["New", "Defined", "Ready to Work"]),
     adoAreaPath: partial?.adoAreaPath ?? envOptional("ADO_AREA_PATH"),
-    githubRepo,
-    githubRepoBranch,
     githubToken,
     githubCommits: partial?.githubCommits ?? envNumber("GITHUB_COMMITS", 50),
     anthropicKey,

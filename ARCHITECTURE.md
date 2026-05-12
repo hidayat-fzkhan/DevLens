@@ -2,7 +2,7 @@
 
 ## Overview
 
-DevLens is a two-tier web application that pulls work items from Azure DevOps (ADO/TFS), enriches them with recent GitHub commit history, and runs AI triage via the Anthropic Claude API. It supports two work item categories: **bugs** and **user stories**.
+DevLens is a two-tier web application that pulls work items from Azure DevOps (ADO/TFS), enriches them with recent GitHub commit history from **one or more user-selected repositories**, and runs AI triage via the Anthropic Claude API. It supports two work item categories: **bugs** and **user stories**.
 
 ---
 
@@ -11,15 +11,17 @@ DevLens is a two-tier web application that pulls work items from Azure DevOps (A
 ```
 ┌──────────────────────────────────────────────────────────┐
 │                     Browser (React SPA)                  │
-│  ┌──────────┐  ┌────────────┐  ┌───────────────────────┐ │
-│  │ SearchBar│  │  BugList   │  │  AIAnalysis /         │ │
-│  └──────────┘  │  BugCard   │  │  ImplementationPrompt │ │
-│                └────────────┘  └───────────────────────┘ │
+│  ┌──────────┐  ┌─────────────┐  ┌──────────────────────┐ │
+│  │ SearchBar│  │ RepoManager │  │ AIAnalysis /         │ │
+│  │          │  │ RepoSelector│  │ ImplementationPrompt │ │
+│  └──────────┘  └─────────────┘  └──────────────────────┘ │
 │                     ↕ /api/* (proxied by Vite dev server) │
 └──────────────────────────────────────────────────────────┘
                           ↕ HTTP :4000
 ┌──────────────────────────────────────────────────────────┐
 │              Express API Server (Node/TS)                 │
+│   app.ts → routes/* → services/* → integrations/*         │
+│                                                           │
 │  ┌──────────┐  ┌────────────┐  ┌──────────────────────┐  │
 │  │  ado.ts  │  │ github.ts  │  │       ai.ts          │  │
 │  │  (WIQL)  │  │ (Octokit)  │  │  (Anthropic SDK)     │  │
@@ -28,7 +30,7 @@ DevLens is a two-tier web application that pulls work items from Azure DevOps (A
 └─────────┼──────────────┼───────────────────┼─────────────┘
           ↓              ↓                   ↓
    Azure DevOps      GitHub REST         Anthropic
-   REST API          API                 Claude API
+   REST API          API (per repo)      Claude API
 ```
 
 ---
@@ -36,65 +38,124 @@ DevLens is a two-tier web application that pulls work items from Azure DevOps (A
 ## Repository Layout
 
 ```
-bugs_agent/
+DevLens/
 ├── backend/
 │   └── src/
-│       ├── server.ts     — Express routes, in-memory cache, analysis orchestrator
-│       ├── ado.ts        — Azure DevOps integration (WIQL queries, PAT auth)
-│       ├── github.ts     — GitHub integration (commits, repo context via Octokit)
-│       ├── ai.ts         — Claude API prompting and response parsing
-│       ├── rank.ts       — Commit relevance scoring
-│       ├── text.ts       — HTML stripping and text normalization
-│       ├── http.ts       — Fetch wrapper with error chain extraction
-│       ├── config.ts     — Single source of truth for env var reads
-│       └── types.ts      — Shared TypeScript types
+│       ├── server.ts                              # entry: app.listen
+│       ├── app.ts                                 # Express composition
+│       ├── routes/
+│       │   ├── query.ts                           # shared query-param parsers
+│       │   ├── workItems.ts                       # /api/{bugs|user-stories}[/analysis]
+│       │   ├── implementationPrompt.ts            # /api/user-stories/:id/implementation-prompt
+│       │   └── repos.ts                           # /api/repos CRUD
+│       ├── services/
+│       │   ├── cache.ts                           # generic TtlCache<T>
+│       │   ├── workItemMapper.ts                  # response shaping + fingerprint
+│       │   ├── analysisService.ts                 # two-stage multi-repo orchestrator
+│       │   └── implementationPromptService.ts     # impl-prompt orchestrator
+│       ├── middleware/
+│       │   └── errorHandler.ts                    # HttpError + asyncHandler + central errors
+│       ├── ado.ts                                 # Azure DevOps integration
+│       ├── ai.ts                                  # Claude API
+│       ├── github.ts                              # GitHub integration (single repo)
+│       ├── repos.ts                               # persisted repo store
+│       ├── config.ts                              # env loader
+│       ├── http.ts                                # fetch wrapper
+│       ├── text.ts                                # text utilities
+│       ├── rank.ts                                # commit scoring helper
+│       └── types.ts                               # shared types
 └── frontend/
     └── src/
-        ├── App.tsx                        — Root component with custom SPA routing
-        ├── hooks/useBugs.ts               — Central state: tickets, analysis, abort
-        ├── services/api.ts                — Typed fetch wrapper for all backend calls
-        ├── types/index.ts                 — Frontend API types
-        ├── utils/formatters.ts            — Date/text formatting
+        ├── App.tsx                                # root + manual SPA routing
+        ├── hooks/useBugs.ts                       # central state hook
+        ├── services/api.ts                        # typed fetch client
+        ├── types/index.ts                         # API types
+        ├── utils/formatters.ts                    # date/text helpers
         └── components/
-            ├── layout/                    — Layout, Header
-            ├── bug/                       — BugList, BugCard, BugDetails, AIAnalysis,
-            │                                ImplementationPrompt
-            ├── search/                    — SearchBar
-            └── common/                    — EmptyState, ErrorMessage
+            ├── layout/                            # Layout, Header
+            ├── bug/                               # BugList, BugCard, BugDetails,
+            │                                       AIAnalysis, ImplementationPrompt
+            ├── repos/                             # RepoManager, RepoSelector
+            ├── search/                            # SearchBar
+            └── common/                            # EmptyState, ErrorMessage
 ```
 
 ---
 
 ## Backend Modules
 
-### `server.ts` — Orchestrator
+### `server.ts` & `app.ts` — Entry and composition
 
-- Registers Express routes dynamically for both `bugs` and `user-stories` via `registerCategoryRoutes()`.
-- Runs the **two-stage AI analysis** pipeline (see below).
-- Maintains an in-memory cache with a 15-minute TTL. Cache keys are composite: `[category, ticketId, branchHeadSHA, model, ticketFingerprint]`.
+- `server.ts` only loads config, calls `createApp()`, and listens.
+- `app.ts` wires cors + json middleware, mounts the three routers under `/api`, and registers the central error handler last.
+
+### `routes/` — HTTP handlers
+
+Route handlers are thin: they parse the request, throw typed `HttpError`s for validation failures, and delegate work to services. The `asyncHandler` wrapper forwards rejected promises to the central error middleware, so handlers contain no try/catch.
+
+- **`routes/workItems.ts`** — Lists and analysis for both `bugs` and `user-stories`. `registerCategoryRoutes()` generates parallel routes for both categories.
+- **`routes/implementationPrompt.ts`** — User-story implementation-prompt endpoint.
+- **`routes/repos.ts`** — CRUD for the persisted repo list.
+- **`routes/query.ts`** — `getQueryRepoIds`, `getQueryTicketId`, `getQueryStringTrimmed`.
+
+### `middleware/errorHandler.ts`
+
+- `HttpError(status, message)` — base class.
+- `badRequest(message)` / `notFound(message)` — factories.
+- `asyncHandler(fn)` — wraps async handlers and forwards errors to `next`.
+- `errorHandler` — central Express error handler. Logs 5xx; serializes all errors to `{ error }` JSON with the appropriate status.
+
+### `services/cache.ts`
+
+- `TtlCache<T>` — generic in-process Map with TTL eviction on read. Default 15 minutes. Used by both analysis and impl-prompt caches.
+
+### `services/workItemMapper.ts`
+
+- `buildWorkItemResponse` — shapes an `AdoWorkItem` into the API response payload.
+- `buildWorkItemFingerprint` — used inside cache keys to invalidate on ticket content changes.
+- `getAnalysisType` — `bugs → "bug"`, `user-stories → "user-story"`.
+
+### `services/analysisService.ts` — the orchestrator
+
+Owns the two-stage AI analysis pipeline:
+
+- `fetchAggregatedCommits({ repos, token, countPerRepo })` — fans out `fetchRecentCommits` across all selected repos in parallel, tagging each commit with `repoLabel = "owner/name"`.
+- `fetchAggregatedRepoContext({ repos, token, bugText, … })` — same fan-out for `fetchGitHubRepoContext`, joining per-repo sections with `### Repo: owner/name (branch: …)` headers.
+- `buildAggregateHeadSha` — sorts each selected repo's head SHA and joins them; this drives the cache key, so changing the selection invalidates the cache.
+- `buildCacheKey` — `[category, ticketId, aggregateHeadSha, model, ticketFingerprint]`.
+- `buildAiAnalysisForWorkItem({ workItem, cfg, repos })` — runs the fast pass, conditionally the deep pass, enriches suspect commits with per-repo URLs, caches, returns.
+
+### `services/implementationPromptService.ts`
+
+- `buildImplementationPrompt({ workItem, cfg, repos, additionalGuidance? })` — uses the same multi-repo fan-out and cache key as the analysis path. Reuses a cached analysis when available; otherwise fetches fresh per-repo context.
 
 ### `ado.ts` — Azure DevOps
 
-- Builds and executes WIQL queries against the ADO REST API using Basic auth (PAT).
+- WIQL queries against the ADO REST API with Basic auth (PAT).
 - Supports both cloud (`dev.azure.com`) and on-premise TFS via full base URL.
-- Maps ADO fields to the internal `AdoWorkItem` type, including `TCM.ReproSteps` and `Microsoft.VSTS.Common.AcceptanceCriteria`.
+- Maps ADO fields to `AdoWorkItem`, including `TCM.ReproSteps` and `Microsoft.VSTS.Common.AcceptanceCriteria`.
 - Work item type mapping: `Bug`/`Defect` → `"bugs"`, `User Story` → `"user-stories"`.
 
-### `github.ts` — GitHub
+### `github.ts` — GitHub (single repo)
 
-- Fetches recent commits on a branch (message, author, changed files) via Octokit.
-- For deep-pass analysis, scores and fetches relevant repo files by matching ticket keywords against the git tree. Up to 8 concurrent blob fetches, capped at 4 files and 6 KB each.
+- `fetchRecentCommits` — commit message, author, changed files via Octokit.
+- `fetchGitHubRepoContext` — scores and fetches relevant repo files by matching ticket keywords against the git tree. Up to 8 concurrent blob fetches, capped at the configured `maxFiles` / `maxChars` per call.
+- Fan-out across multiple repos is the orchestrator's responsibility, not this module's.
 
 ### `ai.ts` — Claude
 
-- Builds category-specific prompts (bugs vs. user stories) including work item text, commits, and optional repo snippets.
-- Parses structured JSON from Claude's response, with a regex fallback for partial parses.
-- Enforces a sparse-data guard for user stories: fewer than 80 characters or 12 words across description + acceptance criteria returns `status: "not-enough-data"` without calling the API.
+- Builds category-specific prompts (bugs vs. user stories).
+- Each `recentCommits` entry can carry a `repo` label; the prompt formats them as `[owner/name] <sha8> | <message> | <files>` so the model can attribute suspect commits.
+- JSON parsing with a regex fallback for partial parses.
+- Sparse-data guard for user stories: < 80 chars or < 12 words across description + acceptance criteria returns `status: "not-enough-data"` without calling the API.
 - Max output tokens: 900 (bugs), 1 400 (user stories), 1 800 (implementation prompt).
 
-### `rank.ts` — Commit Scoring
+### `repos.ts` — Persisted repo store
 
-- Tokenizes bug/story text and scores commits by keyword overlap, filename matches, bug ID references in commit messages, and merge-commit penalties.
+- File-backed JSON store at `backend/data/repos.json` (gitignored).
+- Starts empty on first read; repos are added entirely through the UI / `POST /api/repos`.
+- Each entry: `{ id, url, branch, owner, name, addedAt }`.
+- API: `listRepos`, `addRepo`, `removeRepo`, `findReposByIds`.
 
 ---
 
@@ -102,29 +163,41 @@ bugs_agent/
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/bugs` | List recent bugs. Optional `?ticketId=` to filter to one. |
-| GET | `/api/bugs/:id/analysis` | AI analysis for a specific bug. |
+| GET | `/api/bugs` | List recent bugs. Optional `?ticketId=`. |
+| GET | `/api/bugs/:id/analysis?repoIds=…` | AI analysis. **`repoIds` required.** |
 | GET | `/api/user-stories` | List recent user stories. Optional `?ticketId=`. |
-| GET | `/api/user-stories/:id/analysis` | AI analysis for a specific user story. |
-| GET | `/api/user-stories/:id/implementation-prompt` | Generate implementation prompt. Optional `?additionalGuidance=`. |
+| GET | `/api/user-stories/:id/analysis?repoIds=…` | AI analysis. **`repoIds` required.** |
+| GET | `/api/user-stories/:id/implementation-prompt?repoIds=…` | Generate implementation prompt. **`repoIds` required.** Optional `?additionalGuidance=`. |
+| GET | `/api/repos` | List persisted repos. |
+| POST | `/api/repos` | Add a repo. Body: `{ url, branch }`. |
+| DELETE | `/api/repos/:id` | Remove a repo. |
+
+Missing/empty `repoIds` returns `400 { "error": "Select at least one repository before running analysis." }`. Unknown IDs return `400 { "error": "Selected repositories were not found. Refresh the list and try again." }`.
 
 ---
 
-## Two-Stage AI Analysis
-
-Every `/analysis` request runs:
+## Two-Stage Multi-Repo AI Analysis
 
 ```
+0. Resolve repoIds → Repo[] from the persisted store
+
 1. Fast pass
-   └─ 8 recent commits, no repo file context
-   └─ If Claude confidence is high → return result (cache + respond)
+   └─ Fan out commit fetch across all selected repos (count-per-repo scaled
+      down by selection size; ~4–12 commits per repo)
+   └─ Each commit carries a [owner/name] label in the prompt
+   └─ Claude call with no repo file context
+   └─ If confident (likelyCause / recommendations / impactedAreas present)
+      → cache + respond
 
-2. Deep pass  (only when fast pass is weak)
-   └─ 12 commits + up to 4 scored repo files (max 6 KB each)
-   └─ Result cached and returned
+2. Deep pass (only when fast pass is weak)
+   └─ Fan out repo-context fetch across all selected repos
+      (max files/chars budget divided across repos so total stays ~6 KB)
+   └─ Sections prefixed with "### Repo: owner/name (branch: …)"
+   └─ Second Claude call with the merged context
+   └─ Cache + respond
 ```
 
-The fast pass avoids the latency of repo-context fetching for straightforward tickets. The deep pass is reserved for ambiguous ones.
+Suspect commits in the response include `{ sha, url, repo }`, where `repo` is `"owner/name"`. The cache key includes a sorted aggregate of every selected repo's head SHA, so changing the selection or any repo's branch tip invalidates the entry naturally.
 
 ---
 
@@ -135,13 +208,17 @@ type AIAnalysisResult = {
   analysisType: "bug" | "user-story";
   status: "ready" | "not-enough-data";
   summary: string;
-  likelyCause?: string;          // bugs only
+  likelyCause?: string;            // bugs only
   implementationApproach?: string; // user stories only
-  suspectCommits: string[];      // up to 3 SHA prefixes
-  recommendations: string[];     // 3–4 items
-  importantPoints?: string[];    // up to 3 items
-  impactedAreas?: string[];      // up to 4 (user stories)
-  dependencies?: string[];       // up to 4 (user stories)
+  suspectCommits: Array<{          // up to 3
+    sha: string;
+    url?: string;                  // per-repo GitHub URL
+    repo?: string;                 // "owner/name" when the SHA was matched
+  }>;
+  recommendations: string[];       // 3–4 items
+  importantPoints?: string[];      // up to 3
+  impactedAreas?: string[];        // up to 4 (user stories)
+  dependencies?: string[];         // up to 4 (user stories)
 };
 ```
 
@@ -151,20 +228,22 @@ type AIAnalysisResult = {
 
 ### Routing
 
-No router library is used. `App.tsx` parses `window.location.pathname` on each navigation event and renders one of three views:
+No router library. `App.tsx` parses `window.location.pathname` on each navigation event and renders one of three views:
 
 | URL Pattern | View |
 |-------------|------|
-| `/` | Home — category selection cards |
-| `/{bugs\|user-stories}` | List view — search bar + ticket cards |
-| `/{bugs\|user-stories}/analyze/:id` | Detail view — full analysis |
+| `/` | Home — category cards + `RepoManager` |
+| `/{bugs\|user-stories}` | List view — search + ticket cards |
+| `/{bugs\|user-stories}/analyze/:id` | Detail view — repo selector → AI analysis (→ implementation prompt) |
 
 ### State Management
 
-All network state lives in the `useBugs` hook:
+All network state lives in the `useTickets` hook (`hooks/useBugs.ts`):
+
 - Ticket list, selected ticket, analysis result, implementation prompt.
 - An `AbortController` per in-flight request; cancellation is exposed via a stop button in `SearchBar`.
-- Auto-triggers analysis when a single ticket is returned from a by-ID search.
+- **No auto-trigger** — fetching a ticket no longer auto-runs analysis. The user selects repos in the detail view and clicks "Analyze".
+- Exposes `runAnalysis(ticketId, repoIds)` and `loadImplementationPrompt(ticketId, repoIds, guidance?)`.
 
 ### Component Tree
 
@@ -173,13 +252,16 @@ All network state lives in the `useBugs` hook:
   └─ <Layout>
        ├─ <Header>
        └─ [Page Content]
-            ├─ Home: category cards
+            ├─ Home: category cards + <RepoManager>
             ├─ List: <SearchBar> + <BugList> → <BugCard>
             └─ Detail: <BugCard> (expanded)
                          ├─ <BugDetails>
-                         ├─ <AIAnalysis>
-                         └─ <ImplementationPrompt>  (user stories only)
+                         ├─ <RepoSelector>          (until analysis exists)
+                         ├─ <AIAnalysis>            (after analysis)
+                         └─ <ImplementationPrompt>  (user stories, after analysis)
 ```
+
+`BugCard` keeps the selected repo IDs in local state and forwards them to the implementation-prompt generator so the same selection is reused.
 
 ### Key Libraries
 
@@ -194,81 +276,88 @@ All network state lives in the `useBugs` hook:
 
 ## Caching
 
-| What | Key | TTL |
-|------|-----|-----|
-| Analysis result | `category + ticketId + branchHeadSHA + model + ticketFingerprint` | 15 min |
-| Implementation prompt | same composite key | 15 min |
-| Ticket list | `category` | 15 min |
+| What | Key | TTL | Implementation |
+|------|-----|-----|-----------------|
+| Analysis result | `category + ticketId + aggregateHeadSha + model + ticketFingerprint` | 15 min | `TtlCache<EnrichedAnalysisResult>` in `analysisService.ts` |
+| Implementation prompt | `impl_prompt::<analysisCacheKey>` | 15 min | `TtlCache<string>` in `implementationPromptService.ts` |
 
-Cache is in-process (JavaScript `Map`). There is no distributed cache layer; restarting the server clears all entries.
+`aggregateHeadSha` is a sorted, `|`-joined string of `repoId:head8` for every selected repo, so changing the selection or any branch tip invalidates the cache. There is no distributed cache; restarting the server clears everything.
 
 ---
 
 ## Configuration
 
-All env vars are read in `config.ts`. Nothing else in the codebase reads `process.env` directly.
+All env vars are read in `config.ts`. Nothing else in the codebase reads `process.env` directly (except `server.ts` for the port).
 
 | Variable | Required | Default | Notes |
 |----------|----------|---------|-------|
 | `ADO_ORG` | Yes | — | Org name or full TFS base URL |
 | `ADO_PROJECT` | Yes | — | Project name |
 | `ADO_PAT` | Yes | — | Personal Access Token |
-| `GITHUB_REPO` | Yes | — | `owner/repo` or full GitHub URL |
-| `GITHUB_REPO_BRANCH` | Yes | — | Branch for commits and context |
 | `ANTHROPIC_KEY` | Yes | — | Anthropic API key |
-| `GITHUB_TOKEN` | No | — | Recommended for private repos |
+| `GITHUB_TOKEN` | No | — | Recommended for private repos. Always read from env, never persisted to disk. Repositories themselves are managed via the UI (`/api/repos`), not env. |
 | `ADO_DAYS` | No | `7` | Look-back window |
 | `ADO_TOP` | No | `10` | Max tickets returned |
 | `ADO_STATES` | No | `New,Active` | Comma-separated ADO states |
 | `ADO_AREA_PATH` | No | — | ADO area path filter |
+| `GITHUB_COMMITS` | No | `50` | Upper bound on commits inspected per analysis |
 | `API_PORT` | No | `4000` | Backend listen port |
 | `ANTHROPIC_MODEL` | No | `claude-sonnet-4-6` | Claude model ID |
+
+---
+
+## Persisted State
+
+- **`backend/data/repos.json`** — the persisted repo list, created empty on first request to `/api/repos`. Gitignored. Each entry: `{ id, url, branch, owner, name, addedAt }`.
+- No database. Analysis and impl-prompt caches are in-process and clear on restart.
 
 ---
 
 ## Data Flow: Bug Analysis
 
 ```
-User types ticket ID
+User opens a ticket detail page
        ↓
-useBugs.load(ticketId)
+useTickets.load(ticketId)  →  GET /api/bugs?ticketId=X
        ↓
-GET /api/bugs?ticketId=X        → ado.ts fetches + maps work item
+RepoSelector renders. User checks one or more repos and clicks Analyze.
        ↓
-Single result → auto-trigger
-GET /api/bugs/:id/analysis
+useTickets.runAnalysis(ticketId, [repoId1, repoId2])
        ↓
-server.ts: check cache
+GET /api/bugs/:id/analysis?repoIds=…
+       ↓
+routes/workItems.ts → analysisService.buildAiAnalysisForWorkItem
+       ↓
+findReposByIds → fetchAggregatedCommits (per repo, parallel)
+       ↓
+buildAggregateHeadSha → cache lookup
        ↓ (miss)
-github.ts: fetch 8 recent commits
-ai.ts: fast pass prompt → Claude
+Fast pass: Claude with merged + repo-tagged commits
        ↓
 Confidence high?
   Yes → cache + return
-  No  → github.ts: fetch 12 commits + repo context
-         ai.ts: deep pass prompt → Claude
-                cache + return
+  No  → fetchAggregatedRepoContext (per repo, parallel)
+         Deep pass: Claude with per-repo sections
+         Cache + return
        ↓
-Frontend: AIAnalysis component renders result
+Frontend: AIAnalysis renders. Suspect commits show [owner/name] + per-repo URL.
 ```
 
 ## Data Flow: User Story Implementation Prompt
 
 ```
-User clicks "Generate Implementation Prompt"
+After analysis, user clicks "Generate Implementation Prompt"
        ↓
-GET /api/user-stories/:id/implementation-prompt
+GET /api/user-stories/:id/implementation-prompt?repoIds=…
        ↓
-server.ts: check prompt cache
-       ↓ (miss)
-Check analysis cache (reuse if available, else run analysis)
+implementationPromptService.buildImplementationPrompt
        ↓
-ai.ts: build implementation prompt with analysis context
-       → Claude (max 1 800 tokens)
+Same aggregate cache key. If analysis is cached, reuse its context.
+Otherwise fetchAggregatedRepoContext per repo.
        ↓
-Cache prompt + return to frontend
+Claude (max 1 800 output tokens) → cache → return
        ↓
-ImplementationPrompt component: display + copy button
+ImplementationPrompt: display + copy button
 ```
 
 ---
@@ -276,6 +365,7 @@ ImplementationPrompt component: display + copy button
 ## Security Notes
 
 - ADO auth uses HTTP Basic with a PAT (Base64-encoded in `Authorization` header). The PAT is never forwarded to the frontend.
-- GitHub requests are optionally authenticated via `GITHUB_TOKEN`; unauthenticated requests are subject to GitHub rate limits (60 req/hr).
+- GitHub requests are optionally authenticated via `GITHUB_TOKEN`; the token is read from env and not persisted in `repos.json`.
 - The Anthropic API key is backend-only and never exposed to the client.
+- The persisted `repos.json` contains only repo URLs/branches/owners — no secrets.
 - CORS is enabled on the Express server for local development; tighten for production.

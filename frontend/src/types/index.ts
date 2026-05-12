@@ -9,6 +9,7 @@ export type ApiTicketAnalysis = {
   suspectCommits: Array<{
     sha: string;
     url?: string;
+    repo?: string;
   }>;
   recommendations: string[];
   importantPoints?: string[];
@@ -51,4 +52,21 @@ export type ApiTicketAnalysisResponse = {
   generatedAt: string;
   ticketId: number;
   aiAnalysis: ApiTicketAnalysis;
+};
+
+export type Repo = {
+  id: string;
+  url: string;
+  branch: string;
+  owner: string;
+  name: string;
+  addedAt: string;
+};
+
+export type ApiReposResponse = {
+  repos: Repo[];
+};
+
+export type ApiRepoResponse = {
+  repo: Repo;
 };

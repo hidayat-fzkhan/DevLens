@@ -43,27 +43,40 @@ Open http://localhost:5173
 ### 3. Making Code Changes
 
 Both backend and frontend have hot-reload enabled:
-- Backend: `tsx watch` watches TypeScript files
+- Backend: `nodemon` watches `src/` and runs `tsx src/server.ts` (config in `backend/nodemon.json`)
 - Frontend: Vite's dev server handles hot module replacement
 
-Just save your changes and the servers will automatically reload!
+Just save your changes and the servers will automatically reload. Nodemon also picks up **newly created files** (which `tsx watch` alone sometimes misses).
 
 ## Architecture Overview
 
 ### Backend (`/backend`)
 
-**Key Files:**
-- `src/server.ts` - Express API server
-- `src/ado.ts` - Azure DevOps integration
-- `src/github.ts` - GitHub API client
-- `src/ai.ts` - AI analysis (Anthropic Claude)
-- `src/config.ts` - Configuration from env vars
+The backend follows a layered structure: routes are thin, business logic lives in services, and a central error handler removes per-route try/catch.
+
+**Layout:**
+- `src/server.ts` — entry point (`app.listen`)
+- `src/app.ts` — Express composition (cors, json, routers, error handler)
+- `src/routes/` — HTTP handlers per resource (`workItems`, `implementationPrompt`, `repos`) + shared query parsers
+- `src/services/` — business logic (`analysisService`, `implementationPromptService`, `workItemMapper`, `cache`)
+- `src/middleware/errorHandler.ts` — `HttpError`, `asyncHandler`, central error middleware
+- `src/ado.ts` — Azure DevOps integration
+- `src/github.ts` — GitHub API client (single repo; the orchestrator fans out)
+- `src/ai.ts` — Anthropic Claude prompt building
+- `src/repos.ts` — persisted repo store (`backend/data/repos.json`)
+- `src/config.ts` — env loader
 
 **Key Dependencies:**
-- `express` - Web framework
-- `@octokit/rest` - GitHub API client
-- `tsx` - TypeScript execution with watch mode
-- `@anthropic-ai/sdk` - Claude API client
+- `express` — web framework
+- `@octokit/rest` — GitHub API client
+- `@anthropic-ai/sdk` — Claude API client
+- `tsx` — TypeScript runner
+- `nodemon` — file-watch + auto-restart in dev
+
+**Adding a new endpoint:**
+1. Add a handler in the appropriate file under `src/routes/` (or create a new router and mount it in `src/app.ts`).
+2. Push business logic into `src/services/`. Throw `badRequest(...)` / `notFound(...)` from `middleware/errorHandler.ts` instead of writing your own try/catch.
+3. If you need configuration, add a field to `Config` in `src/config.ts`.
 
 ### Frontend (`/frontend`)
 
@@ -71,19 +84,20 @@ Just save your changes and the servers will automatically reload!
 ```
 src/
 ├── components/
-│   ├── bug/              # Bug display components
-│   ├── common/           # Reusable components
-│   ├── layout/           # Layout structure
-│   ├── search/           # Search interface
+│   ├── bug/              # Bug display components (BugList, BugCard, AIAnalysis, ImplementationPrompt)
+│   ├── repos/            # RepoManager (home page) + RepoSelector (ticket detail)
+│   ├── common/           # Reusable components (EmptyState, ErrorMessage)
+│   ├── layout/           # Layout, Header
+│   └── search/           # SearchBar
 ├── hooks/
-│   └── useBugs.ts        # State management hook
+│   └── useBugs.ts        # useTickets — list, runAnalysis(ticketId, repoIds), loadImplementationPrompt
 ├── services/
-│   └── api.ts            # API client
+│   └── api.ts            # API client (tickets, analysis, prompt, repos CRUD)
 ├── types/
 │   └── index.ts          # TypeScript types
 ├── utils/
 │   └── formatters.ts     # Utility functions
-└── App.tsx               # Root component
+└── App.tsx               # Root component (manual SPA routing)
 ```
 
 For detailed component architecture, see [frontend/ARCHITECTURE.md](frontend/ARCHITECTURE.md).
@@ -237,9 +251,9 @@ git push origin feature/my-feature
 ## Next Steps for Feature Addition
 
 1. **New Ranking Factor:** Edit `src/rank.ts`
-2. **New API Endpoint:** Add route in `src/server.ts`
-3. **New UI Component:** Create in `frontend/src/components/`
-4. **New Configuration:** Add to `src/config.ts` and `.env`
+2. **New API Endpoint:** Add a route file under `backend/src/routes/`, mount it in `backend/src/app.ts`, and put business logic in `backend/src/services/`
+3. **New UI Component:** Create in `frontend/src/components/<feature>/`
+4. **New Configuration:** Add the field to `Config` in `backend/src/config.ts` and document it in `backend/.env.example`
 
 ## Resources
 
