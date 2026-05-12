@@ -1,34 +1,16 @@
-:root {
-  color-scheme: light;
-  font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
-}
+/*
+ * Theme tokens (palette, typography, scrollbar, body bg) come from the MUI
+ * theme in src/theme/. This file holds only resets that must apply before
+ * React mounts.
+ */
 
-body {
-  margin: 0;
-  background: #f0f2f5;
-}
-
+html,
+body,
 #root {
+  margin: 0;
   min-height: 100vh;
 }
 
-/* Smooth transitions on interactive elements */
 a {
   transition: color 0.15s;
-}
-
-/* Better scrollbar styling on webkit */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 3px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.35);
 }

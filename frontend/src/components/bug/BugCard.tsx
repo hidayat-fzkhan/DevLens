@@ -28,13 +28,12 @@ type BugCardProps = Readonly<{
   onGeneratePrompt?: (ticketId: number, repoIds: string[], guidance?: string) => void;
 }>;
 
-function getStateBorderColor(state?: string): string {
+function getStateTone(state?: string): "active" | "new" | "resolved" | "closed" {
   const s = state?.toLowerCase() ?? "";
-  if (s === "active" || s === "in progress") return "#1976d2";
-  if (s === "new") return "#2e7d32";
-  if (s === "resolved" || s === "done") return "#7b1fa2";
-  if (s === "closed" || s === "removed") return "#757575";
-  return "#1976d2";
+  if (s === "new") return "new";
+  if (s === "resolved" || s === "done") return "resolved";
+  if (s === "closed" || s === "removed") return "closed";
+  return "active";
 }
 
 export function BugCard({
@@ -51,18 +50,20 @@ export function BugCard({
   const isBug = bug.category === "bugs";
   const showImplementationPrompt =
     isDetailed && !isBug && bug.aiAnalysis?.status === "ready";
-  const borderColor = getStateBorderColor(bug.state);
+  const stateTone = getStateTone(bug.state);
   const [selectedRepoIds, setSelectedRepoIds] = useState<string[]>([]);
   const showRepoSelector =
     isDetailed && !bug.aiAnalysis && !analysisLoading && !analysisError;
 
   return (
     <Card
-      sx={{
-        borderLeft: `4px solid ${borderColor}`,
-        transition: "box-shadow 0.2s",
-        "&:hover": { boxShadow: isDetailed ? undefined : 3 },
-      }}
+      sx={(theme) => ({
+        borderLeft: `4px solid ${theme.palette.state[stateTone]}`,
+        transition: "border-color 0.15s, background-color 0.15s",
+        ...(isDetailed
+          ? {}
+          : { "&:hover": { borderColor: theme.palette.text.secondary } }),
+      })}
     >
       <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
         <Stack spacing={2}>

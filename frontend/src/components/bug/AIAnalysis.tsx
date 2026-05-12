@@ -160,7 +160,7 @@ export function AIAnalysis({ analysis }: AIAnalysisProps) {
           <PsychologyOutlinedIcon color="primary" />
           <Typography variant="h6" fontWeight={700}>AI Analysis</Typography>
         </Stack>
-        <Card variant="outlined" sx={{ backgroundColor: "#f9f9fb" }}>
+        <Card variant="outlined" sx={(theme) => ({ backgroundColor: theme.palette.background.paper })}>
           <CardContent>
             <Typography variant="body2" color="text.secondary">
               Not enough data for AI analysis.
@@ -186,7 +186,10 @@ export function AIAnalysis({ analysis }: AIAnalysisProps) {
         )}
       </Stack>
 
-      <Card variant="outlined" sx={{ backgroundColor: "#f9f9fb" }}>
+      <Card
+        variant="outlined"
+        sx={(theme) => ({ backgroundColor: theme.palette.background.paper })}
+      >
         <CardContent>
           <Stack spacing={2}>
             <AnalysisSection

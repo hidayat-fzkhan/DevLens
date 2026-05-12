@@ -67,12 +67,19 @@ DevLens/
 └── frontend/
     └── src/
         ├── App.tsx                                # root + manual SPA routing
+        ├── main.tsx                               # entry; wraps App in ThemeModeProvider
+        ├── theme/                                 # design system
+        │   ├── palette.ts                         # dark + light tokens (incl. border, category, state)
+        │   ├── typography.ts                      # sans + mono stacks
+        │   ├── theme.ts                           # buildTheme(mode); flat surfaces, hairline borders
+        │   └── ThemeModeProvider.tsx              # provider + useThemeMode()
+        ├── ui/                                    # thin MUI wrappers (Mono, Pill, Surface, Section, KeyValue)
         ├── hooks/useBugs.ts                       # central state hook
         ├── services/api.ts                        # typed fetch client
         ├── types/index.ts                         # API types
         ├── utils/formatters.ts                    # date/text helpers
         └── components/
-            ├── layout/                            # Layout, Header
+            ├── layout/                            # Layout, Header (includes theme toggle)
             ├── bug/                               # BugList, BugCard, BugDetails,
             │                                       AIAnalysis, ImplementationPrompt
             ├── repos/                             # RepoManager, RepoSelector
@@ -263,13 +270,23 @@ All network state lives in the `useTickets` hook (`hooks/useBugs.ts`):
 
 `BugCard` keeps the selected repo IDs in local state and forwards them to the implementation-prompt generator so the same selection is reused.
 
+### Theming
+
+DevLens ships a GitHub-flavored design system in `frontend/src/theme/`:
+
+- **Two palettes** — `dark` (default) and `light`. Dark uses GitHub-dark anchors: canvas `#0d1117`, paper `#161b22`, border `#30363d`, accent `#2f81f7`. Light uses the corresponding GitHub-light values.
+- **Custom palette tokens** (TypeScript module augmentation): `palette.canvas`, `palette.border.{default, muted}`, `palette.category.{bugs, stories, repos}`, `palette.state.{new, active, resolved, closed}`. Components consume these instead of hardcoded hex.
+- **`buildTheme(mode)`** in `theme/theme.ts` flattens MUI: zero shadows, 6 px radius, hairline borders on `Paper`/`Card`/`AppBar`, denser typography (14 px base, system sans + monospace stacks), themed scrollbars, themed tooltips.
+- **`ThemeModeProvider`** wraps `<App />` and exposes `useThemeMode()` (`mode`, `setMode`, `toggle`). The current mode is persisted to `localStorage` under `devlens.themeMode`; the Header renders a sun/moon `IconButton` that calls `toggle()`.
+- **`ui/` primitives** — `Mono`, `Pill`, `Surface`, `Section`, `KeyValue`. New visual variants land here so future redesigns happen in one place.
+
 ### Key Libraries
 
 | Library | Role |
 |---------|------|
 | React 18 | UI rendering |
 | Vite | Dev server, build bundler (proxies `/api` → `:4000`) |
-| Material UI v5 | Component library |
+| Material UI v5 | Component library (themed to a GitHub-flavored flat aesthetic) |
 | Emotion | CSS-in-JS for MUI styling |
 
 ---

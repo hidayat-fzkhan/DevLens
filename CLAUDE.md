@@ -110,6 +110,8 @@ Missing or unknown `repoIds` produce a 400 with `{ "error": "Select at least one
 
 ### Frontend layout (`frontend/src/`)
 
+- **`theme/`** — Design system. `palette.ts` (GitHub-flavored dark + light, with custom tokens `palette.border`, `palette.category`, `palette.state`), `typography.ts` (sans + mono stacks), `theme.ts` (`buildTheme(mode)` with MUI overrides — flat surfaces, hairline borders, 6 px radius), and `ThemeModeProvider.tsx` (provider + `useThemeMode()` hook, dark default, persisted to `localStorage` under `devlens.themeMode`). `main.tsx` wraps `<App />` in this provider.
+- **`ui/`** — Thin primitives over MUI: `Mono`, `Pill` (semantic-tone chip), `Surface`, `Section`, `KeyValue`. New visual variants land here so future redesigns happen in one place. Components consume `theme.palette.*` (never hardcoded hex).
 - **`App.tsx`** — Root component with manual client-side routing (no router library). Routes: `/` (home), `/bugs`, `/bugs/analyze/:id`, `/user-stories`, `/user-stories/analyze/:id`.
 - **`hooks/useBugs.ts`** — Central state hook (`useTickets`). Exposes `runAnalysis(ticketId, repoIds)` and `loadImplementationPrompt(ticketId, repoIds, guidance?)`. **Analysis is no longer auto-triggered** — the user must select repos and click Analyze.
 - **`services/api.ts`** — Typed fetch wrapper. `fetchTicketAnalysis` and `fetchImplementationPrompt` accept `repoIds: string[]` and append `?repoIds=`; errors from the backend's `{ error }` JSON are surfaced as the thrown message.

@@ -25,4 +25,5 @@ When editing:
 - Keep backend code in `backend/src` and frontend code in `frontend/src`.
 - Backend: thin routes, business logic in `services/`, throw `badRequest(...)` / `notFound(...)` from `middleware/errorHandler.ts` instead of writing your own try/catch.
 - Frontend: feature-based component folders (`bug/`, `repos/`, etc.); all network state lives in `useTickets` (`hooks/useBugs.ts`).
+- Frontend theming: GitHub-flavored dark + light palettes in `frontend/src/theme/` (default dark, toggled in the Header, persisted in `localStorage`). **Never hardcode hex colors** — use `theme.palette.*` (`palette.border`, `palette.category.*`, `palette.state.*`) or `alpha(...)` from `@mui/material/styles`. Prefer the `ui/` primitives (`Mono`, `Pill`, `Surface`, `Section`, `KeyValue`) over raw MUI when one exists.
 - Prefer small, focused changes and update `README.md`, `ARCHITECTURE.md`, and `CLAUDE.md` if commands or structure change.

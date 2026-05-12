@@ -86,7 +86,10 @@ export function ImplementationPrompt({
       {prompt && !loading && (
         <Card
           variant="outlined"
-          sx={{ backgroundColor: "#f9f9fb", borderColor: "primary.light" }}
+          sx={(theme) => ({
+            backgroundColor: theme.palette.background.paper,
+            borderColor: theme.palette.primary.main,
+          })}
         >
           <CardContent>
             <Stack spacing={1.5}>

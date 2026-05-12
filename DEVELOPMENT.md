@@ -83,11 +83,13 @@ The backend follows a layered structure: routes are thin, business logic lives i
 **Component Structure:**
 ```
 src/
+├── theme/                # Design system (palettes, typography, MUI overrides, ThemeModeProvider)
+├── ui/                   # Thin MUI wrappers (Mono, Pill, Surface, Section, KeyValue)
 ├── components/
 │   ├── bug/              # Bug display components (BugList, BugCard, AIAnalysis, ImplementationPrompt)
 │   ├── repos/            # RepoManager (home page) + RepoSelector (ticket detail)
 │   ├── common/           # Reusable components (EmptyState, ErrorMessage)
-│   ├── layout/           # Layout, Header
+│   ├── layout/           # Layout, Header (includes theme toggle)
 │   └── search/           # SearchBar
 ├── hooks/
 │   └── useBugs.ts        # useTickets — list, runAnalysis(ticketId, repoIds), loadImplementationPrompt
@@ -97,8 +99,15 @@ src/
 │   └── index.ts          # TypeScript types
 ├── utils/
 │   └── formatters.ts     # Utility functions
+├── main.tsx              # Entry (wraps App in ThemeModeProvider)
 └── App.tsx               # Root component (manual SPA routing)
 ```
+
+**Theming:**
+- Dark by default. Toggle via the sun/moon button in the Header; persisted in `localStorage` under `devlens.themeMode`.
+- Two palettes live in `src/theme/palette.ts` (GitHub-flavored dark + light) with custom tokens — `palette.border`, `palette.category.{bugs,stories,repos}`, `palette.state.{new,active,resolved,closed}`.
+- **Do not hardcode hex values** in components. Use `theme.palette.*` (with `alpha(color, opacity)` from `@mui/material/styles` for tints). This is enforced by convention only — a quick `grep -rE '#[0-9a-fA-F]{3,6}\b' frontend/src/components` should return zero hits.
+- Prefer the `ui/` primitives (`Mono`, `Pill`, `Surface`, …) over raw MUI when one exists; new visual variants land there so future redesigns happen in one place.
 
 For detailed component architecture, see [frontend/ARCHITECTURE.md](frontend/ARCHITECTURE.md).
 

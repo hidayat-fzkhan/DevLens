@@ -27,6 +27,7 @@ The current product supports two main workflows:
 - In-memory analysis caching keyed by ticket content, every selected repo's branch head, and the model
 - Timing logs for commit fetch, repo-context fetch, model calls, and total analysis time
 - Modular Express backend (`routes/`, `services/`, `middleware/`) with a central error handler
+- GitHub-flavored UI with **dark mode by default** and a sun/moon toggle (persisted per device). Themed via a dedicated `theme/` design-system layer with custom palette tokens (`border`, `category`, `state`) and a thin `ui/` primitive layer (`Mono`, `Pill`, `Surface`, `Section`, `KeyValue`).
 
 ## Features
 
@@ -101,8 +102,19 @@ devlens/
 │   ├── package.json
 │   └── src/
 │       ├── App.tsx
-│       ├── main.tsx
-│       ├── styles.css
+│       ├── main.tsx                               # wraps App in ThemeModeProvider
+│       ├── styles.css                             # minimal resets; theme handles colors
+│       ├── theme/                                 # design system (palettes, typography, MUI overrides)
+│       │   ├── palette.ts                         # dark + light tokens (border, category, state, …)
+│       │   ├── typography.ts                      # sans + mono stacks, GitHub-like type scale
+│       │   ├── theme.ts                           # buildTheme(mode)
+│       │   └── ThemeModeProvider.tsx              # provider + useThemeMode() hook
+│       ├── ui/                                    # thin wrappers over MUI (one place for visual swaps)
+│       │   ├── Mono.tsx                           # monospace span
+│       │   ├── Pill.tsx                           # semantic-tone chip
+│       │   ├── Surface.tsx                        # bordered container
+│       │   ├── Section.tsx                        # titled section
+│       │   └── KeyValue.tsx                       # label / value pair
 │       ├── components/
 │       │   ├── bug/
 │       │   │   ├── AIAnalysis.tsx

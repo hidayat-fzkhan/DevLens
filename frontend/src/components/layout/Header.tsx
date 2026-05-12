@@ -1,5 +1,17 @@
-import { AppBar, Box, Button, Stack, Toolbar, Typography } from "@mui/material";
-import BugReportIcon from "@mui/icons-material/BugReport";
+import {
+  AppBar,
+  Box,
+  Button,
+  IconButton,
+  Stack,
+  Toolbar,
+  Tooltip,
+  Typography,
+} from "@mui/material";
+import PsychologyOutlinedIcon from "@mui/icons-material/PsychologyOutlined";
+import DarkModeOutlinedIcon from "@mui/icons-material/DarkModeOutlined";
+import LightModeOutlinedIcon from "@mui/icons-material/LightModeOutlined";
+import { useThemeMode } from "../../theme/ThemeModeProvider";
 
 type HeaderProps = Readonly<{
   currentPath: string;
@@ -12,17 +24,11 @@ const NAV_ITEMS = [
 ] as const;
 
 export function Header({ currentPath, onNavigate }: HeaderProps) {
+  const { mode, toggle } = useThemeMode();
+
   return (
-    <AppBar
-      position="static"
-      elevation={0}
-      sx={{
-        background:
-          "linear-gradient(135deg, #1565c0 0%, #1976d2 60%, #42a5f5 100%)",
-        borderBottom: "1px solid rgba(255,255,255,0.12)",
-      }}
-    >
-      <Toolbar sx={{ gap: 1 }}>
+    <AppBar position="static">
+      <Toolbar sx={{ gap: 1, minHeight: 56 }}>
         <Box
           sx={{
             display: "flex",
@@ -30,29 +36,30 @@ export function Header({ currentPath, onNavigate }: HeaderProps) {
             gap: 1,
             flexGrow: 1,
             cursor: "pointer",
-            "&:hover": { opacity: 0.9 },
+            "&:hover": { opacity: 0.85 },
           }}
           onClick={() => onNavigate("/")}
         >
-          <BugReportIcon sx={{ fontSize: 28 }} />
-          <Box>
-            <Typography
-              variant="h6"
-              component="div"
-              sx={{ lineHeight: 1.1, fontWeight: 700, letterSpacing: "-0.3px" }}
-            >
-              DevLens
-            </Typography>
-            <Typography
-              variant="caption"
-              sx={{ opacity: 0.75, lineHeight: 1, display: "block" }}
-            >
-              AI-powered triage
-            </Typography>
-          </Box>
+          <PsychologyOutlinedIcon
+            sx={{ fontSize: 22, color: "primary.main" }}
+          />
+          <Typography
+            variant="h5"
+            component="div"
+            sx={{ fontWeight: 600, letterSpacing: "-0.3px" }}
+          >
+            DevLens
+          </Typography>
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{ ml: 1, display: { xs: "none", sm: "inline" } }}
+          >
+            AI-powered triage
+          </Typography>
         </Box>
 
-        <Stack direction="row" spacing={0.5}>
+        <Stack direction="row" spacing={0.5} alignItems="center">
           {NAV_ITEMS.map((item) => {
             const isActive =
               currentPath === item.path ||
@@ -61,27 +68,37 @@ export function Header({ currentPath, onNavigate }: HeaderProps) {
             return (
               <Button
                 key={item.path}
-                color="inherit"
+                size="small"
                 onClick={() => onNavigate(item.path)}
-                sx={{
-                  borderRadius: 2,
-                  px: 2,
-                  fontWeight: isActive ? 700 : 400,
+                sx={(theme) => ({
+                  px: 1.5,
+                  color: isActive
+                    ? theme.palette.text.primary
+                    : theme.palette.text.secondary,
+                  fontWeight: isActive ? 600 : 500,
                   backgroundColor: isActive
-                    ? "rgba(255,255,255,0.18)"
+                    ? theme.palette.action.selected
                     : "transparent",
                   "&:hover": {
-                    backgroundColor: isActive
-                      ? "rgba(255,255,255,0.25)"
-                      : "rgba(255,255,255,0.1)",
+                    backgroundColor: theme.palette.action.hover,
+                    color: theme.palette.text.primary,
                   },
-                  transition: "background-color 0.15s",
-                }}
+                })}
               >
                 {item.label}
               </Button>
             );
           })}
+
+          <Tooltip title={mode === "dark" ? "Switch to light" : "Switch to dark"}>
+            <IconButton onClick={toggle} size="small" sx={{ ml: 0.5 }}>
+              {mode === "dark" ? (
+                <LightModeOutlinedIcon fontSize="small" />
+              ) : (
+                <DarkModeOutlinedIcon fontSize="small" />
+              )}
+            </IconButton>
+          </Tooltip>
         </Stack>
       </Toolbar>
     </AppBar>
