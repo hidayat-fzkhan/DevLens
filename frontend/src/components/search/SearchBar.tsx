@@ -1,8 +1,8 @@
-import { Box, Button, InputAdornment, TextField } from "@mui/material";
+import { Box, Button, InputAdornment, TextField, Typography } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import StopCircleOutlinedIcon from "@mui/icons-material/StopCircleOutlined";
 import ClearIcon from "@mui/icons-material/Clear";
-import { useMemo } from "react";
+import { forwardRef, useMemo, type Ref } from "react";
 
 type SearchBarProps = Readonly<{
   label: string;
@@ -12,9 +12,13 @@ type SearchBarProps = Readonly<{
   onQueryChange: (query: string) => void;
   onSearch: (query?: string) => void;
   onStop: () => void;
+  inputRef?: Ref<HTMLInputElement>;
 }>;
 
-export function SearchBar({ label, placeholder, query, loading, onQueryChange, onSearch, onStop }: SearchBarProps) {
+export const SearchBar = forwardRef<HTMLInputElement, SearchBarProps>(function SearchBar(
+  { label, placeholder, query, loading, onQueryChange, onSearch, onStop, inputRef },
+  _outerRef,
+) {
   const hasQuery = useMemo(() => query.trim().length > 0, [query]);
 
   const handleSubmit = (event: React.FormEvent) => {
@@ -36,12 +40,32 @@ export function SearchBar({ label, placeholder, query, loading, onQueryChange, o
         placeholder={placeholder}
         size="small"
         fullWidth
+        inputRef={inputRef}
         InputProps={{
           startAdornment: (
             <InputAdornment position="start">
               <SearchIcon fontSize="small" sx={{ color: "text.disabled" }} />
             </InputAdornment>
           ),
+          endAdornment: !query && !loading ? (
+            <InputAdornment position="end">
+              <Typography
+                component="kbd"
+                variant="caption"
+                sx={(theme) => ({
+                  fontFamily: theme.typography.fontFamily,
+                  border: `1px solid ${theme.palette.border.default}`,
+                  borderRadius: 0.75,
+                  px: 0.75,
+                  py: 0.1,
+                  color: theme.palette.text.secondary,
+                  fontSize: "0.7rem",
+                })}
+              >
+                /
+              </Typography>
+            </InputAdornment>
+          ) : undefined,
         }}
       />
       <Button
@@ -76,4 +100,4 @@ export function SearchBar({ label, placeholder, query, loading, onQueryChange, o
       )}
     </Box>
   );
-}
+});

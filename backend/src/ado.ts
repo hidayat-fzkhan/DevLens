@@ -94,9 +94,9 @@ export async function fetchNewWorkItems(params: {
   pat: string;
   category: WorkItemCategory;
   top: number;
-  createdInLastDays: number;
+  areaPath: string;
   states: string[];
-  areaPath?: string;
+  iterationPath?: string;
 }): Promise<AdoWorkItem[]> {
   const baseUrl = orgToBaseUrl(params.adoOrg);
   const projectPath = encodeURIComponent(params.project);
@@ -110,8 +110,10 @@ export async function fetchNewWorkItems(params: {
     ? `AND [System.WorkItemType] IN (${buildWiqlList(workItemTypes)})`
     : "";
 
-  const areaClause = params.areaPath
-    ? `AND [System.AreaPath] UNDER '${escapeWiqlString(params.areaPath)}'`
+  const areaClause = `AND [System.AreaPath] UNDER '${escapeWiqlString(params.areaPath)}'`;
+
+  const iterationClause = params.iterationPath
+    ? `AND [System.IterationPath] UNDER '${escapeWiqlString(params.iterationPath)}'`
     : "";
 
   // Keep WIQL simple and broadly compatible.
@@ -122,10 +124,10 @@ FROM WorkItems
 WHERE
   [System.TeamProject] = @project
   ${workItemTypeClause}
-  AND [System.CreatedDate] >= @Today - ${Math.max(0, params.createdInLastDays)}
+  ${iterationClause}
   ${statesClause}
   ${areaClause}
-ORDER BY [System.CreatedDate] DESC`
+ORDER BY [System.ChangedDate] DESC`
   };
 
   const wiqlUrl = `${baseUrl}/${encodeURIComponent(
@@ -155,6 +157,116 @@ ORDER BY [System.CreatedDate] DESC`
   return itemsResp.value
     .map((item) => mapWorkItem(item, baseUrl, projectPath))
     .filter((item) => item.category === params.category);
+}
+
+type ClassificationNode = {
+  id: number;
+  identifier?: string;
+  name: string;
+  structureType: "area" | "iteration";
+  hasChildren?: boolean;
+  path?: string;
+  children?: ClassificationNode[];
+  attributes?: {
+    startDate?: string;
+    finishDate?: string;
+  };
+};
+
+export type AreaPath = {
+  path: string;
+  name: string;
+};
+
+export type IterationPath = {
+  path: string;
+  name: string;
+  startDate?: string;
+  finishDate?: string;
+};
+
+function normalizeNodePath(rawPath: string | undefined, project: string): string {
+  if (!rawPath) return project;
+  // ADO returns paths like "\Project\Iteration\Sprint 1" — strip the
+  // "\Iteration" or "\Area" virtual segment so it matches what WIQL expects
+  // ("Project\Sprint 1" or "Project\Sub\Sprint 1").
+  const trimmed = rawPath.replace(/^\\+/, "").replace(/\\+$/, "");
+  return trimmed
+    .replace(new RegExp(String.raw`^${project}\\(Iteration|Area)\\?`, "i"), `${project}\\`)
+    .replace(new RegExp(String.raw`^${project}\\(Iteration|Area)$`, "i"), project);
+}
+
+function collectAreas(node: ClassificationNode, project: string, acc: AreaPath[]): void {
+  const path = normalizeNodePath(node.path, project);
+  acc.push({ path, name: node.name });
+  if (node.children) {
+    for (const child of node.children) {
+      collectAreas(child, project, acc);
+    }
+  }
+}
+
+function collectIterationLeaves(
+  node: ClassificationNode,
+  project: string,
+  acc: IterationPath[],
+): void {
+  if (!node.children || node.children.length === 0) {
+    const path = normalizeNodePath(node.path, project);
+    acc.push({
+      path,
+      name: node.name,
+      startDate: node.attributes?.startDate,
+      finishDate: node.attributes?.finishDate,
+    });
+    return;
+  }
+  for (const child of node.children) {
+    collectIterationLeaves(child, project, acc);
+  }
+}
+
+async function fetchClassificationTree(params: {
+  adoOrg: string;
+  project: string;
+  pat: string;
+  kind: "Areas" | "Iterations";
+}): Promise<ClassificationNode> {
+  const baseUrl = orgToBaseUrl(params.adoOrg);
+  const projectPath = encodeURIComponent(params.project);
+  const url = `${baseUrl}/${projectPath}/_apis/wit/classificationnodes/${params.kind}?$depth=10&api-version=7.0`;
+  return httpJson<ClassificationNode>(url, {
+    headers: { Authorization: basicPatAuthHeader(params.pat) },
+  });
+}
+
+export async function fetchAreaPaths(params: {
+  adoOrg: string;
+  project: string;
+  pat: string;
+}): Promise<AreaPath[]> {
+  const root = await fetchClassificationTree({ ...params, kind: "Areas" });
+  const out: AreaPath[] = [];
+  collectAreas(root, params.project, out);
+  return out;
+}
+
+export async function fetchIterationPaths(params: {
+  adoOrg: string;
+  project: string;
+  pat: string;
+}): Promise<IterationPath[]> {
+  const root = await fetchClassificationTree({ ...params, kind: "Iterations" });
+  const out: IterationPath[] = [];
+  collectIterationLeaves(root, params.project, out);
+  // Sort by start date desc so most recent sprints appear first; undated last.
+  out.sort((a, b) => {
+    if (a.startDate && b.startDate) return b.startDate.localeCompare(a.startDate);
+    if (a.startDate) return -1;
+    if (b.startDate) return 1;
+    return a.path.localeCompare(b.path);
+  });
+  return out;
 }
 
 export async function fetchWorkItemById(params: {

@@ -17,6 +17,7 @@ export function useTickets(category: TicketCategory | null) {
   const [tickets, setTickets] = useState<ApiTicket[]>([]);
   const [generatedAt, setGeneratedAt] = useState<string | null>(null);
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
+  const [filtersConfigured, setFiltersConfigured] = useState(true);
   const abortControllerRef = useRef<AbortController | null>(null);
   const analysisAbortControllerRef = useRef<AbortController | null>(null);
   const promptAbortControllerRef = useRef<AbortController | null>(null);
@@ -173,6 +174,7 @@ export function useTickets(category: TicketCategory | null) {
         const data = await fetchTickets(category, ticketId, controller.signal);
         setTickets(data.tickets);
         setGeneratedAt(data.generatedAt);
+        setFiltersConfigured(data.filtersConfigured ?? true);
       } catch (err) {
         if (err instanceof Error && err.name === "AbortError") {
           setError("Request cancelled");
@@ -213,6 +215,7 @@ export function useTickets(category: TicketCategory | null) {
     tickets,
     selectedTicketId,
     generatedAt,
+    filtersConfigured,
     load,
     reset,
     handleStop,

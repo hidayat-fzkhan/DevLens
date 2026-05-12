@@ -1,10 +1,14 @@
 import type {
+  ApiAreasResponse,
   ApiImplementationPromptResponse,
+  ApiIterationsResponse,
   ApiRepoResponse,
   ApiReposResponse,
+  ApiSettingsResponse,
   ApiTicketAnalysisResponse,
   ApiTicketListResponse,
   TicketCategory,
+  WorkItemFilters,
 } from "../types";
 
 function getApiBase(): string {
@@ -101,6 +105,52 @@ export async function deleteRepo(id: string): Promise<void> {
     const text = await res.text().catch(() => "");
     throw new Error(text || `Request failed: ${res.status}`);
   }
+}
+
+export async function fetchSettings(signal?: AbortSignal): Promise<ApiSettingsResponse> {
+  const base = getApiBase();
+  const res = await fetch(`${base}/api/settings`, { signal });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(parseErrorBody(text, res.status));
+  }
+  return (await res.json()) as ApiSettingsResponse;
+}
+
+export async function saveSettings(
+  input: Partial<WorkItemFilters>,
+): Promise<ApiSettingsResponse> {
+  const base = getApiBase();
+  const res = await fetch(`${base}/api/settings`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(parseErrorBody(text, res.status));
+  }
+  return (await res.json()) as ApiSettingsResponse;
+}
+
+export async function fetchAreas(signal?: AbortSignal): Promise<ApiAreasResponse> {
+  const base = getApiBase();
+  const res = await fetch(`${base}/api/ado/areas`, { signal });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(parseErrorBody(text, res.status));
+  }
+  return (await res.json()) as ApiAreasResponse;
+}
+
+export async function fetchIterations(signal?: AbortSignal): Promise<ApiIterationsResponse> {
+  const base = getApiBase();
+  const res = await fetch(`${base}/api/ado/iterations`, { signal });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(parseErrorBody(text, res.status));
+  }
+  return (await res.json()) as ApiIterationsResponse;
 }
 
 export async function fetchImplementationPrompt(

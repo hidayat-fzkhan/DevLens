@@ -19,8 +19,10 @@ import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import GitHubIcon from "@mui/icons-material/GitHub";
 import { addRepo, deleteRepo, fetchRepos } from "../../services/api";
 import type { Repo } from "../../types";
+import { useToast } from "../common/ToastProvider";
 
 export function RepoManager() {
+  const { showToast } = useToast();
   const [repos, setRepos] = useState<Repo[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -69,6 +71,7 @@ export function RepoManager() {
       setRepos((prev) => [...prev, res.repo]);
       resetForm();
       setFormOpen(false);
+      showToast(`Added ${res.repo.owner}/${res.repo.name}`, "success");
     } catch (err) {
       setSubmitError((err as Error).message);
     } finally {
@@ -77,12 +80,16 @@ export function RepoManager() {
   };
 
   const handleDelete = async (id: string) => {
+    const target = repos.find((r) => r.id === id);
     setDeletingId(id);
     try {
       await deleteRepo(id);
       setRepos((prev) => prev.filter((r) => r.id !== id));
+      if (target) {
+        showToast(`Removed ${target.owner}/${target.name}`, "info");
+      }
     } catch (err) {
-      setLoadError((err as Error).message);
+      showToast((err as Error).message, "error");
     } finally {
       setDeletingId(null);
     }

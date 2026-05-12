@@ -7,6 +7,8 @@ import AccountTreeOutlinedIcon from "@mui/icons-material/AccountTreeOutlined";
 import ChecklistOutlinedIcon from "@mui/icons-material/ChecklistOutlined";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import type { ApiTicket } from "../../types";
+import { Mono } from "../../ui/Mono";
+import { Pill } from "../../ui/Pill";
 
 type AIAnalysisProps = Readonly<{
   analysis: NonNullable<ApiTicket["aiAnalysis"]>;
@@ -258,13 +260,17 @@ export function AIAnalysis({ analysis }: AIAnalysisProps) {
                 icon={<CommitIcon fontSize="small" />}
                 label={isBug ? "Related Recent Commit(s)" : "Potentially Relevant Recent Commit(s)"}
               >
-                <Stack spacing={0.5}>
+                <Stack spacing={0.75}>
                   {analysis.suspectCommits.map((commit) => (
-                    <Typography key={`${commit.repo ?? ""}:${commit.sha}`} variant="body2" sx={{ fontFamily: "monospace", fontSize: 12 }}>
+                    <Stack
+                      key={`${commit.repo ?? ""}:${commit.sha}`}
+                      direction="row"
+                      spacing={1}
+                      alignItems="center"
+                      sx={{ flexWrap: "wrap" }}
+                    >
                       {commit.repo && (
-                        <Box component="span" sx={{ mr: 1, color: "text.secondary", fontFamily: "inherit", fontSize: 12 }}>
-                          [{commit.repo}]
-                        </Box>
+                        <Pill label={commit.repo} tone="repos" sx={{ height: 20, fontSize: "0.7rem" }} />
                       )}
                       {commit.url ? (
                         <Box
@@ -272,17 +278,24 @@ export function AIAnalysis({ analysis }: AIAnalysisProps) {
                           href={commit.url}
                           target="_blank"
                           rel="noreferrer"
-                          sx={{ color: "primary.main", textDecoration: "none", "&:hover": { textDecoration: "underline" } }}
+                          sx={(theme) => ({
+                            fontFamily: theme.typography.fontFamily,
+                            color: theme.palette.primary.main,
+                            textDecoration: "none",
+                            "&:hover": { textDecoration: "underline" },
+                          })}
                         >
-                          {commit.sha.slice(0, 8)}
+                          <Mono>{commit.sha.slice(0, 8)}</Mono>
                         </Box>
                       ) : (
-                        commit.sha.slice(0, 8)
+                        <Mono>{commit.sha.slice(0, 8)}</Mono>
                       )}
-                      <Box component="span" sx={{ ml: 1, fontFamily: "inherit", fontSize: 13, color: "text.secondary" }}>
-                        {commit.sha.slice(8)}
-                      </Box>
-                    </Typography>
+                      {commit.sha.length > 8 && (
+                        <Mono size="sm" sx={{ color: "text.disabled" }}>
+                          {commit.sha.slice(8)}
+                        </Mono>
+                      )}
+                    </Stack>
                   ))}
                 </Stack>
               </AnalysisSection>

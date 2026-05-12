@@ -3,18 +3,17 @@ import {
   Alert,
   Box,
   Button,
-  Card,
-  CardContent,
-  Checkbox,
+  Chip,
   CircularProgress,
-  FormControlLabel,
   Stack,
   Typography,
 } from "@mui/material";
+import { alpha } from "@mui/material/styles";
 import PlayArrowOutlinedIcon from "@mui/icons-material/PlayArrowOutlined";
 import GitHubIcon from "@mui/icons-material/GitHub";
 import { fetchRepos } from "../../services/api";
 import type { Repo } from "../../types";
+import { Surface } from "../../ui/Surface";
 
 type RepoSelectorProps = Readonly<{
   analyzeLabel: string;
@@ -56,78 +55,126 @@ export function RepoSelector({
     onSelectionChange?.([...next]);
   };
 
+  const selectAll = () => {
+    const all = new Set(repos.map((r) => r.id));
+    setSelected(all);
+    onSelectionChange?.([...all]);
+  };
+
+  const clearAll = () => {
+    setSelected(new Set());
+    onSelectionChange?.([]);
+  };
+
   const selectedIds = [...selected];
   const canAnalyze = selectedIds.length > 0 && !disabled;
+  const allSelected = repos.length > 0 && selectedIds.length === repos.length;
 
   return (
-    <Card variant="outlined">
-      <CardContent>
-        <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1.5 }}>
-          <GitHubIcon sx={{ color: "text.secondary" }} />
+    <Surface>
+      <Stack spacing={2}>
+        <Stack direction="row" alignItems="center" spacing={1}>
+          <GitHubIcon sx={{ color: "text.secondary", fontSize: 18 }} />
           <Typography variant="subtitle1" fontWeight={600}>
-            Select repositories to analyze
+            Choose repositories to analyze
           </Typography>
         </Stack>
 
-        {error && (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            {error}
-          </Alert>
-        )}
+        {error && <Alert severity="error">{error}</Alert>}
 
-        {loading ? (
+        {loading && (
           <Stack direction="row" alignItems="center" spacing={1}>
-            <CircularProgress size={16} />
+            <CircularProgress size={14} />
             <Typography variant="body2" color="text.secondary">
               Loading repositories…
             </Typography>
           </Stack>
-        ) : repos.length === 0 ? (
-          <Typography variant="body2" color="text.disabled">
-            No repositories configured. Add one from the home page first.
-          </Typography>
-        ) : (
-          <Stack spacing={0.5} sx={{ mb: 2 }}>
-            {repos.map((repo) => (
-              <FormControlLabel
-                key={repo.id}
-                control={
-                  <Checkbox
-                    size="small"
-                    checked={selected.has(repo.id)}
-                    onChange={() => toggle(repo.id)}
-                    disabled={disabled}
-                  />
-                }
-                label={
-                  <Box>
-                    <Typography component="span" fontWeight={500}>
-                      {repo.owner}/{repo.name}
-                    </Typography>
-                    <Typography
-                      component="span"
-                      variant="caption"
-                      color="text.secondary"
-                      sx={{ ml: 1 }}
-                    >
-                      branch: {repo.branch}
-                    </Typography>
-                  </Box>
-                }
-              />
-            ))}
-          </Stack>
         )}
 
-        <Button
-          variant="contained"
-          startIcon={<PlayArrowOutlinedIcon />}
-          disabled={!canAnalyze}
-          onClick={() => onAnalyze(selectedIds)}
-        >
-          {analyzeLabel}
-        </Button>
-      </CardContent>
-    </Card>
+        {!loading && repos.length === 0 && (
+          <Typography variant="body2" color="text.disabled">
+            No repositories configured.{" "}
+            <Box
+              component="a"
+              href="/repos"
+              sx={{ color: "primary.main", textDecoration: "none", "&:hover": { textDecoration: "underline" } }}
+            >
+              Add one →
+            </Box>
+          </Typography>
+        )}
+
+        {!loading && repos.length > 0 && (
+          <>
+            <Stack direction="row" flexWrap="wrap" gap={0.75}>
+              {repos.map((repo) => {
+                const isSelected = selected.has(repo.id);
+                return (
+                  <Chip
+                    key={repo.id}
+                    label={
+                      <Box component="span">
+                        <Box component="span" sx={{ fontWeight: 500 }}>
+                          {repo.owner}/{repo.name}
+                        </Box>
+                        <Box
+                          component="span"
+                          sx={{ color: "text.secondary", ml: 0.75, fontSize: "0.7rem" }}
+                        >
+                          {repo.branch}
+                        </Box>
+                      </Box>
+                    }
+                    onClick={() => !disabled && toggle(repo.id)}
+                    variant={isSelected ? "filled" : "outlined"}
+                    sx={(theme) => ({
+                      height: 28,
+                      cursor: disabled ? "not-allowed" : "pointer",
+                      borderRadius: 1,
+                      borderColor: isSelected
+                        ? theme.palette.primary.main
+                        : theme.palette.border.default,
+                      backgroundColor: isSelected
+                        ? alpha(theme.palette.primary.main, theme.palette.mode === "dark" ? 0.18 : 0.12)
+                        : "transparent",
+                      color: isSelected ? theme.palette.primary.main : theme.palette.text.primary,
+                      "& .MuiChip-label": { px: 1.25 },
+                      "&:hover": {
+                        backgroundColor: isSelected
+                          ? alpha(theme.palette.primary.main, theme.palette.mode === "dark" ? 0.25 : 0.18)
+                          : theme.palette.action.hover,
+                      },
+                    })}
+                  />
+                );
+              })}
+            </Stack>
+
+            <Stack direction="row" alignItems="center" spacing={1.5}>
+              <Button
+                variant="contained"
+                startIcon={<PlayArrowOutlinedIcon />}
+                disabled={!canAnalyze}
+                onClick={() => onAnalyze(selectedIds)}
+              >
+                {analyzeLabel}
+              </Button>
+              <Box sx={{ flex: 1 }} />
+              <Typography variant="caption" color="text.secondary">
+                {selectedIds.length} of {repos.length} selected
+              </Typography>
+              <Button
+                size="small"
+                variant="text"
+                onClick={allSelected ? clearAll : selectAll}
+                disabled={disabled}
+              >
+                {allSelected ? "Clear all" : "Select all"}
+              </Button>
+            </Stack>
+          </>
+        )}
+      </Stack>
+    </Surface>
   );
 }

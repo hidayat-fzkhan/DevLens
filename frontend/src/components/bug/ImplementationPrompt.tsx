@@ -2,10 +2,7 @@ import { useState } from "react";
 import {
   Box,
   Button,
-  Card,
-  CardContent,
   CircularProgress,
-  Divider,
   Stack,
   TextField,
   Typography,
@@ -13,6 +10,8 @@ import {
 import AutoFixHighOutlinedIcon from "@mui/icons-material/AutoFixHighOutlined";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import CheckIcon from "@mui/icons-material/Check";
+import { Surface } from "../../ui/Surface";
+import { MONO_FONT_STACK } from "../../theme/typography";
 import { ErrorMessage } from "../common/ErrorMessage";
 
 type ImplementationPromptProps = Readonly<{
@@ -39,90 +38,97 @@ export function ImplementationPrompt({
   };
 
   return (
-    <>
-      <Divider sx={{ mt: 2 }} />
-      <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 2 }}>
-        <AutoFixHighOutlinedIcon color="primary" />
-        <Typography variant="h6" fontWeight={700}>
-          Prompt to Implement
-        </Typography>
-      </Stack>
-
-      {!prompt && !loading && !error && (
-        <Stack spacing={1.5}>
-          <TextField
-            label="Additional guidance (optional)"
-            placeholder="e.g. focus on the frontend only, use React hooks, avoid touching the auth module…"
-            multiline
-            minRows={2}
-            maxRows={5}
-            size="small"
-            value={guidance}
-            onChange={(e) => setGuidance(e.target.value)}
-          />
-          <Button
-            variant="contained"
-            color="primary"
-            startIcon={<AutoFixHighOutlinedIcon />}
-            sx={{ alignSelf: "flex-start" }}
-            onClick={() => onGenerate(guidance.trim() || undefined)}
-          >
-            Generate Implementation Prompt
-          </Button>
-        </Stack>
-      )}
-
-      {loading && (
-        <Stack direction="row" spacing={1.5} alignItems="center" sx={{ py: 1 }}>
-          <CircularProgress size={18} thickness={4} />
-          <Typography variant="body2" color="text.secondary">
-            Generating implementation prompt…
+    <Surface>
+      <Stack spacing={2}>
+        <Stack direction="row" spacing={1} alignItems="center">
+          <AutoFixHighOutlinedIcon sx={{ color: "primary.main", fontSize: 18 }} />
+          <Typography variant="subtitle1" fontWeight={600}>
+            Implementation Prompt
           </Typography>
         </Stack>
-      )}
 
-      {error && !loading && <ErrorMessage message={error} />}
+        {!prompt && !loading && !error && (
+          <Stack spacing={1.5}>
+            <Typography variant="body2" color="text.secondary">
+              Generate a ready-to-paste prompt for your AI coding assistant, tailored to this user story.
+            </Typography>
+            <TextField
+              label="Additional guidance (optional)"
+              placeholder="e.g. focus on the frontend only, use React hooks, avoid touching the auth module…"
+              multiline
+              minRows={2}
+              maxRows={5}
+              size="small"
+              value={guidance}
+              onChange={(e) => setGuidance(e.target.value)}
+            />
+            <Button
+              variant="contained"
+              startIcon={<AutoFixHighOutlinedIcon />}
+              sx={{ alignSelf: "flex-start" }}
+              onClick={() => onGenerate(guidance.trim() || undefined)}
+            >
+              Generate Prompt
+            </Button>
+          </Stack>
+        )}
 
-      {prompt && !loading && (
-        <Card
-          variant="outlined"
-          sx={(theme) => ({
-            backgroundColor: theme.palette.background.paper,
-            borderColor: theme.palette.primary.main,
-          })}
-        >
-          <CardContent>
-            <Stack spacing={1.5}>
-              <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
-                <Button
-                  size="small"
-                  variant={copied ? "contained" : "outlined"}
-                  color={copied ? "success" : "primary"}
-                  startIcon={copied ? <CheckIcon /> : <ContentCopyIcon />}
-                  onClick={() => void handleCopy()}
-                >
-                  {copied ? "Copied!" : "Copy to Clipboard"}
-                </Button>
-              </Box>
+        {loading && (
+          <Stack direction="row" spacing={1.5} alignItems="center" sx={{ py: 1 }}>
+            <CircularProgress size={16} thickness={4} />
+            <Typography variant="body2" color="text.secondary">
+              Generating implementation prompt…
+            </Typography>
+          </Stack>
+        )}
+
+        {error && !loading && <ErrorMessage message={error} />}
+
+        {prompt && !loading && (
+          <Stack spacing={1.5}>
+            <Stack direction="row" alignItems="center" spacing={1}>
+              <Box sx={{ flex: 1 }} />
+              <Button
+                size="small"
+                variant={copied ? "contained" : "outlined"}
+                color={copied ? "success" : "primary"}
+                startIcon={copied ? <CheckIcon /> : <ContentCopyIcon />}
+                onClick={() => void handleCopy()}
+              >
+                {copied ? "Copied" : "Copy"}
+              </Button>
+            </Stack>
+            <Box
+              sx={(theme) => ({
+                border: `1px solid ${theme.palette.border.muted}`,
+                borderRadius: 1,
+                backgroundColor:
+                  theme.palette.mode === "dark"
+                    ? theme.palette.background.default
+                    : theme.palette.background.paper,
+                p: 1.5,
+                maxHeight: 480,
+                overflow: "auto",
+              })}
+            >
               <Typography
-                variant="body2"
                 component="pre"
-                sx={{
+                sx={(theme) => ({
                   whiteSpace: "pre-wrap",
                   wordBreak: "break-word",
-                  fontFamily: "'Fira Mono', 'Cascadia Code', 'Consolas', monospace",
-                  fontSize: 12.5,
-                  lineHeight: 1.7,
+                  fontFamily: MONO_FONT_STACK,
+                  fontSize: "0.78rem",
+                  lineHeight: 1.6,
                   m: 0,
-                  color: "text.primary",
-                }}
+                  color: theme.palette.text.primary,
+                })}
               >
                 {prompt}
               </Typography>
-            </Stack>
-          </CardContent>
-        </Card>
-      )}
-    </>
+            </Box>
+          </Stack>
+        )}
+      </Stack>
+    </Surface>
   );
 }

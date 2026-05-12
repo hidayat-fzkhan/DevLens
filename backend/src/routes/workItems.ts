@@ -5,8 +5,11 @@ import { asyncHandler, badRequest, notFound } from "../middleware/errorHandler.j
 import { findReposByIds } from "../repos.js";
 import { buildAiAnalysisForWorkItem } from "../services/analysisService.js";
 import { buildWorkItemResponse } from "../services/workItemMapper.js";
+import { areFiltersConfigured, getSettings } from "../settings.js";
 import type { WorkItemCategory } from "../types.js";
 import { getQueryRepoIds, getQueryTicketId } from "./query.js";
+
+const TOP_LIMIT = 25;
 
 const CATEGORY_LABELS: Record<WorkItemCategory, string> = {
   bugs: "Bug",
@@ -29,24 +32,38 @@ function registerCategoryRoutes(params: {
       const cfg = loadConfig();
       const ticketId = getQueryTicketId(req.query);
 
-      const workItems = Number.isFinite(ticketId)
-        ? await fetchWorkItemById({
-            adoOrg: cfg.adoOrg,
-            project: cfg.adoProject,
-            pat: cfg.adoPat,
-            id: ticketId as number,
-            category: params.category,
-          }).then((workItem) => (workItem ? [workItem] : []))
-        : await fetchNewWorkItems({
-            adoOrg: cfg.adoOrg,
-            project: cfg.adoProject,
-            pat: cfg.adoPat,
-            category: params.category,
-            top: cfg.adoTop,
-            createdInLastDays: cfg.adoDays,
-            states: cfg.adoStates,
-            areaPath: cfg.adoAreaPath,
+      let workItems;
+      if (Number.isFinite(ticketId)) {
+        const workItem = await fetchWorkItemById({
+          adoOrg: cfg.adoOrg,
+          project: cfg.adoProject,
+          pat: cfg.adoPat,
+          id: ticketId as number,
+          category: params.category,
+        });
+        workItems = workItem ? [workItem] : [];
+      } else {
+        const settings = await getSettings();
+        if (!areFiltersConfigured(settings)) {
+          res.status(200).json({
+            generatedAt: new Date().toISOString(),
+            tickets: [],
+            [params.listKey]: [],
+            filtersConfigured: false,
           });
+          return;
+        }
+        workItems = await fetchNewWorkItems({
+          adoOrg: cfg.adoOrg,
+          project: cfg.adoProject,
+          pat: cfg.adoPat,
+          category: params.category,
+          top: TOP_LIMIT,
+          areaPath: settings.areaPath as string,
+          iterationPath: settings.iterationPath,
+          states: settings.states,
+        });
+      }
 
       const response = workItems.map(buildWorkItemResponse);
 
@@ -54,6 +71,7 @@ function registerCategoryRoutes(params: {
         generatedAt: new Date().toISOString(),
         tickets: response,
         [params.listKey]: response,
+        filtersConfigured: true,
       });
     }),
   );

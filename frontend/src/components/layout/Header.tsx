@@ -1,97 +1,43 @@
 import {
   AppBar,
   Box,
-  Button,
   IconButton,
   Stack,
   Toolbar,
   Tooltip,
-  Typography,
 } from "@mui/material";
-import PsychologyOutlinedIcon from "@mui/icons-material/PsychologyOutlined";
 import DarkModeOutlinedIcon from "@mui/icons-material/DarkModeOutlined";
 import LightModeOutlinedIcon from "@mui/icons-material/LightModeOutlined";
+import MenuIcon from "@mui/icons-material/Menu";
 import { useThemeMode } from "../../theme/ThemeModeProvider";
 
 type HeaderProps = Readonly<{
-  currentPath: string;
-  onNavigate: (path: string) => void;
+  onOpenSidebar?: () => void;
+  showSidebarButton?: boolean;
 }>;
 
-const NAV_ITEMS = [
-  { label: "Bugs", path: "/bugs" },
-  { label: "User Stories", path: "/user-stories" },
-] as const;
-
-export function Header({ currentPath, onNavigate }: HeaderProps) {
+export function Header({ onOpenSidebar, showSidebarButton = false }: HeaderProps) {
   const { mode, toggle } = useThemeMode();
 
   return (
-    <AppBar position="static">
-      <Toolbar sx={{ gap: 1, minHeight: 56 }}>
-        <Box
-          sx={{
-            display: "flex",
-            alignItems: "center",
-            gap: 1,
-            flexGrow: 1,
-            cursor: "pointer",
-            "&:hover": { opacity: 0.85 },
-          }}
-          onClick={() => onNavigate("/")}
-        >
-          <PsychologyOutlinedIcon
-            sx={{ fontSize: 22, color: "primary.main" }}
-          />
-          <Typography
-            variant="h5"
-            component="div"
-            sx={{ fontWeight: 600, letterSpacing: "-0.3px" }}
+    <AppBar position="sticky" sx={{ zIndex: (theme) => theme.zIndex.appBar }}>
+      <Toolbar sx={{ gap: 1, minHeight: 48, px: { xs: 1.5, sm: 2 } }}>
+        {showSidebarButton && (
+          <IconButton
+            size="small"
+            edge="start"
+            onClick={onOpenSidebar}
+            sx={{ mr: 0.5 }}
           >
-            DevLens
-          </Typography>
-          <Typography
-            variant="caption"
-            color="text.secondary"
-            sx={{ ml: 1, display: { xs: "none", sm: "inline" } }}
-          >
-            AI-powered triage
-          </Typography>
-        </Box>
+            <MenuIcon fontSize="small" />
+          </IconButton>
+        )}
+
+        <Box sx={{ flexGrow: 1 }} />
 
         <Stack direction="row" spacing={0.5} alignItems="center">
-          {NAV_ITEMS.map((item) => {
-            const isActive =
-              currentPath === item.path ||
-              currentPath.startsWith(`${item.path}/`);
-
-            return (
-              <Button
-                key={item.path}
-                size="small"
-                onClick={() => onNavigate(item.path)}
-                sx={(theme) => ({
-                  px: 1.5,
-                  color: isActive
-                    ? theme.palette.text.primary
-                    : theme.palette.text.secondary,
-                  fontWeight: isActive ? 600 : 500,
-                  backgroundColor: isActive
-                    ? theme.palette.action.selected
-                    : "transparent",
-                  "&:hover": {
-                    backgroundColor: theme.palette.action.hover,
-                    color: theme.palette.text.primary,
-                  },
-                })}
-              >
-                {item.label}
-              </Button>
-            );
-          })}
-
           <Tooltip title={mode === "dark" ? "Switch to light" : "Switch to dark"}>
-            <IconButton onClick={toggle} size="small" sx={{ ml: 0.5 }}>
+            <IconButton onClick={toggle} size="small">
               {mode === "dark" ? (
                 <LightModeOutlinedIcon fontSize="small" />
               ) : (

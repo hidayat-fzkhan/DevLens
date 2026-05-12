@@ -46,6 +46,37 @@ export type ApiImplementationPromptResponse = {
 export type ApiTicketListResponse = {
   generatedAt: string;
   tickets: ApiTicket[];
+  filtersConfigured?: boolean;
+};
+
+export type WorkItemFilters = {
+  areaPath?: string;
+  iterationPath?: string;
+  states: string[];
+};
+
+export type AreaPath = {
+  path: string;
+  name: string;
+};
+
+export type IterationPath = {
+  path: string;
+  name: string;
+  startDate?: string;
+  finishDate?: string;
+};
+
+export type ApiSettingsResponse = {
+  settings: WorkItemFilters;
+};
+
+export type ApiAreasResponse = {
+  areas: AreaPath[];
+};
+
+export type ApiIterationsResponse = {
+  iterations: IterationPath[];
 };
 
 export type ApiTicketAnalysisResponse = {

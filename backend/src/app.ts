@@ -3,6 +3,7 @@ import express, { type Express } from "express";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { createImplementationPromptRouter } from "./routes/implementationPrompt.js";
 import { createReposRouter } from "./routes/repos.js";
+import { createSettingsRouter } from "./routes/settings.js";
 import { createWorkItemRouter } from "./routes/workItems.js";
 
 export function createApp(): Express {
@@ -14,6 +15,7 @@ export function createApp(): Express {
   app.use("/api", createWorkItemRouter());
   app.use("/api", createImplementationPromptRouter());
   app.use("/api", createReposRouter());
+  app.use("/api", createSettingsRouter());
 
   app.use(errorHandler);
 
