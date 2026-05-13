@@ -3,6 +3,7 @@ import type { MessageParam } from "@anthropic-ai/sdk/resources/messages.js";
 import type { WorkItemAnalysisType } from "./types.js";
 
 const MAX_BUG_FIELD_CHARS = 600;
+const MAX_NFR_CHARS = 1500;
 const MAX_REPO_CONTEXT_CHARS = 6000;
 const MAX_COMMITS = 12;
 const MAX_FILES_PER_COMMIT = 3;
@@ -139,6 +140,7 @@ export type AIAnalysisParams = {
   ticketDescription?: string;
   reproSteps?: string;
   acceptanceCriteria?: string;
+  nonFunctionalRequirements?: string;
   repoContext?: string;
   repoBranch: string;
   recentCommits: Array<{
@@ -168,6 +170,7 @@ function buildBugPrompt(params: {
   ticketTitle: string;
   ticketDescription?: string;
   reproSteps?: string;
+  nonFunctionalRequirements?: string;
   repoBranch: string;
   commitsText: string;
   repoContext?: string;
@@ -185,6 +188,9 @@ function buildBugPrompt(params: {
         ? `Bug description: ${params.ticketDescription}`
         : undefined,
       params.reproSteps ? `Repro steps: ${params.reproSteps}` : undefined,
+      params.nonFunctionalRequirements
+        ? `Non-functional requirements (APIs, services, constraints):\n${params.nonFunctionalRequirements}`
+        : undefined,
       `Branch: ${params.repoBranch}`,
       `Recent commits:\n${params.commitsText || "None provided"}`,
       params.repoContext
@@ -211,6 +217,7 @@ function buildUserStoryPrompt(params: {
   ticketTitle: string;
   ticketDescription?: string;
   acceptanceCriteria?: string;
+  nonFunctionalRequirements?: string;
   repoBranch: string;
   commitsText: string;
   repoContext?: string;
@@ -220,6 +227,7 @@ function buildUserStoryPrompt(params: {
       "You analyze software user stories using only the supplied ticket details, recent commits, and repo snippets.",
       "Return concise JSON only.",
       "Focus on implementation approach, impacted areas, dependencies, and practical next steps.",
+      "Treat non-functional requirements as authoritative — they list the APIs, services, and constraints the implementation must use.",
       "Do not speculate beyond the supplied context.",
     ].join(" "),
     prompt: [
@@ -229,6 +237,9 @@ function buildUserStoryPrompt(params: {
         : undefined,
       params.acceptanceCriteria
         ? `Acceptance criteria: ${params.acceptanceCriteria}`
+        : undefined,
+      params.nonFunctionalRequirements
+        ? `Non-functional requirements (APIs, services, constraints, dependencies):\n${params.nonFunctionalRequirements}`
         : undefined,
       `Branch: ${params.repoBranch}`,
       `Recent commits:\n${params.commitsText || "None provided"}`,
@@ -285,6 +296,7 @@ export type ImplementationPromptParams = {
   ticketTitle: string;
   ticketDescription?: string;
   acceptanceCriteria?: string;
+  nonFunctionalRequirements?: string;
   repoContext?: string;
   cachedAnalysis?: {
     implementationApproach?: string;
@@ -308,6 +320,10 @@ export async function generateImplementationPrompt(
   const acceptanceCriteria = compactText(
     params.acceptanceCriteria,
     MAX_BUG_FIELD_CHARS,
+  );
+  const nonFunctionalRequirements = compactText(
+    params.nonFunctionalRequirements,
+    MAX_NFR_CHARS,
   );
   const repoContext = compactRepoContext(params.repoContext);
 
@@ -345,6 +361,9 @@ export async function generateImplementationPrompt(
     acceptanceCriteria
       ? `Acceptance criteria: ${acceptanceCriteria}`
       : undefined,
+    nonFunctionalRequirements
+      ? `Non-functional requirements (APIs, services, constraints, dependencies — treat as authoritative):\n${nonFunctionalRequirements}`
+      : undefined,
     `Target branch: ${params.repoBranch}`,
     analysisContext
       ? `Prior AI analysis (use as additional context):\n${analysisContext}`
@@ -358,7 +377,8 @@ export async function generateImplementationPrompt(
       "The prompt must include:",
       "- A clear, one-sentence task description",
       "- Which files or modules to create or modify (reference the codebase context if provided)",
-      "- Any constraints, edge cases, or non-functional requirements derived from the story",
+      "- The specific APIs, services, and constraints listed in the non-functional requirements (if any) — name each one explicitly",
+      "- Any edge cases or additional non-functional concerns derived from the story",
       "- All acceptance criteria that the implementation must satisfy",
       "- The target branch name for the implementation",
     ].join("\n"),
@@ -426,6 +446,10 @@ export async function analyzeWithAI(
     params.acceptanceCriteria,
     MAX_BUG_FIELD_CHARS,
   );
+  const nonFunctionalRequirements = compactText(
+    params.nonFunctionalRequirements,
+    MAX_NFR_CHARS,
+  );
   const repoContext = compactRepoContext(params.repoContext);
 
   const { systemPrompt, prompt } =
@@ -434,6 +458,7 @@ export async function analyzeWithAI(
           ticketTitle: params.ticketTitle,
           ticketDescription,
           reproSteps,
+          nonFunctionalRequirements,
           repoBranch: params.repoBranch,
           commitsText,
           repoContext,
@@ -442,6 +467,7 @@ export async function analyzeWithAI(
           ticketTitle: params.ticketTitle,
           ticketDescription,
           acceptanceCriteria,
+          nonFunctionalRequirements,
           repoBranch: params.repoBranch,
           commitsText,
           repoContext,

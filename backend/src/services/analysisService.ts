@@ -200,6 +200,9 @@ export async function buildAiAnalysisForWorkItem(params: {
   const acceptanceCriteria = params.workItem.acceptanceCriteria
     ? stripHtmlToText(params.workItem.acceptanceCriteria)
     : undefined;
+  const nonFunctionalRequirements = params.workItem.nonFunctionalRequirements
+    ? stripHtmlToText(params.workItem.nonFunctionalRequirements)
+    : undefined;
 
   if (
     params.workItem.category === "user-stories" &&
@@ -216,6 +219,7 @@ export async function buildAiAnalysisForWorkItem(params: {
     description,
     reproSteps,
     acceptanceCriteria,
+    nonFunctionalRequirements,
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -270,6 +274,7 @@ export async function buildAiAnalysisForWorkItem(params: {
     ticketDescription: description,
     reproSteps,
     acceptanceCriteria,
+    nonFunctionalRequirements,
     repoContext: undefined,
     repoBranch: repoLabelSummary,
     recentCommits: fastCommits,
@@ -316,6 +321,7 @@ export async function buildAiAnalysisForWorkItem(params: {
         ticketDescription: description,
         reproSteps,
         acceptanceCriteria,
+        nonFunctionalRequirements,
         repoContext,
         repoBranch: repoLabelSummary,
         recentCommits: commits.slice(0, 12).map((c) => ({

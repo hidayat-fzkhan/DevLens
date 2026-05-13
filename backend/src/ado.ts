@@ -13,10 +13,18 @@ type WorkItemsResponse = {
   }>;
 };
 
-const WORK_ITEM_TYPES_BY_CATEGORY: Record<WorkItemCategory, string[]> = {
-  bugs: ["Bug", "Defect"],
-  "user-stories": ["User Story"],
-};
+const BUG_WORK_ITEM_TYPES = ["Bug", "Defect"];
+const BUG_TYPE_SET = new Set(BUG_WORK_ITEM_TYPES);
+// Excluded from the User Stories bucket entirely — tasks are sub-work that
+// shouldn't crowd the story list.
+const USER_STORY_EXCLUDED_TYPES = [...BUG_WORK_ITEM_TYPES, "Task", "Feature", "Epic", "Test Plan"];
+
+function buildWorkItemTypeClause(category: WorkItemCategory): string {
+  if (category === "bugs") {
+    return `AND [System.WorkItemType] IN (${buildWiqlList(BUG_WORK_ITEM_TYPES)})`;
+  }
+  return `AND [System.WorkItemType] NOT IN (${buildWiqlList(USER_STORY_EXCLUDED_TYPES)})`;
+}
 
 function escapeWiqlString(value: string): string {
   return value.replaceAll("'", "''");
@@ -46,26 +54,52 @@ function pickIdentity(fields: AdoWorkItemFields | undefined, key: string): strin
   return typeof displayName === "string" ? displayName : undefined;
 }
 
-function getCategoryForWorkItemType(workItemType: string | undefined): WorkItemCategory | null {
-  if (!workItemType) {
-    return null;
+function pickNumber(fields: AdoWorkItemFields | undefined, key: string): number | undefined {
+  const v = fields?.[key];
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string") {
+    const parsed = Number(v);
+    return Number.isFinite(parsed) ? parsed : undefined;
   }
+  return undefined;
+}
 
-  if (WORK_ITEM_TYPES_BY_CATEGORY.bugs.includes(workItemType)) {
+const NFR_KEY_CANDIDATES = [
+  "Custom.NonFunctionalRequirements",
+  "Custom.NonFunctionalRequirement",
+  "Custom.NFR",
+  "Custom.NonFunctional",
+  "Microsoft.VSTS.Common.NonFunctionalRequirements",
+];
+
+function pickNonFunctionalRequirements(fields: AdoWorkItemFields | undefined): string | undefined {
+  if (!fields) return undefined;
+  for (const key of NFR_KEY_CANDIDATES) {
+    const v = pickString(fields, key);
+    if (v) return v;
+  }
+  // Fuzzy fallback — covers custom field reference names we haven't seen yet.
+  for (const [key, value] of Object.entries(fields)) {
+    if (typeof value !== "string") continue;
+    const lower = key.toLowerCase();
+    if (lower.includes("nonfunctional") || lower.endsWith(".nfr") || lower.endsWith("/nfr")) {
+      return value;
+    }
+  }
+  return undefined;
+}
+
+function getCategoryForWorkItemType(workItemType: string | undefined): WorkItemCategory {
+  if (workItemType && BUG_TYPE_SET.has(workItemType)) {
     return "bugs";
   }
-
-  if (WORK_ITEM_TYPES_BY_CATEGORY["user-stories"].includes(workItemType)) {
-    return "user-stories";
-  }
-
-  return null;
+  return "user-stories";
 }
 
 function mapWorkItem(item: { id: number; url: string; fields?: AdoWorkItemFields }, baseUrl: string, projectPath: string): AdoWorkItem {
   const fields = item.fields;
   const workItemType = pickString(fields, "System.WorkItemType") ?? "Unknown";
-  const category = getCategoryForWorkItemType(workItemType) ?? "bugs";
+  const category = getCategoryForWorkItemType(workItemType);
 
   return {
     id: item.id,
@@ -74,15 +108,25 @@ function mapWorkItem(item: { id: number; url: string; fields?: AdoWorkItemFields
     title: pickString(fields, "System.Title") ?? `(${workItemType} ${item.id})`,
     state: pickString(fields, "System.State"),
     createdDate: pickString(fields, "System.CreatedDate"),
+    createdBy: pickIdentity(fields, "System.CreatedBy"),
+    changedDate: pickString(fields, "System.ChangedDate"),
+    changedBy: pickIdentity(fields, "System.ChangedBy"),
     assignedTo: pickIdentity(fields, "System.AssignedTo"),
     areaPath: pickString(fields, "System.AreaPath"),
     iterationPath: pickString(fields, "System.IterationPath"),
     tags: pickString(fields, "System.Tags"),
+    priority: pickNumber(fields, "Microsoft.VSTS.Common.Priority"),
+    severity: pickString(fields, "Microsoft.VSTS.Common.Severity"),
+    storyPoints: pickNumber(fields, "Microsoft.VSTS.Scheduling.StoryPoints"),
+    resolvedDate: pickString(fields, "Microsoft.VSTS.Common.ResolvedDate"),
+    resolvedBy: pickIdentity(fields, "Microsoft.VSTS.Common.ResolvedBy"),
+    resolvedReason: pickString(fields, "Microsoft.VSTS.Common.ResolvedReason"),
     description: pickString(fields, "System.Description"),
     reproSteps:
       pickString(fields, "Microsoft.VSTS.TCM.ReproSteps") ??
       pickString(fields, "Microsoft.VSTS.TCM.SystemInfo"),
     acceptanceCriteria: pickString(fields, "Microsoft.VSTS.Common.AcceptanceCriteria"),
+    nonFunctionalRequirements: pickNonFunctionalRequirements(fields),
     url: item.url,
     webUrl: `${baseUrl}/${projectPath}/_workitems/edit/${item.id}`,
   } satisfies AdoWorkItem;
@@ -100,15 +144,12 @@ export async function fetchNewWorkItems(params: {
 }): Promise<AdoWorkItem[]> {
   const baseUrl = orgToBaseUrl(params.adoOrg);
   const projectPath = encodeURIComponent(params.project);
-  const workItemTypes = WORK_ITEM_TYPES_BY_CATEGORY[params.category];
 
   const statesClause = params.states.length
     ? `AND [System.State] IN (${buildWiqlList(params.states)})`
     : "";
 
-  const workItemTypeClause = workItemTypes.length
-    ? `AND [System.WorkItemType] IN (${buildWiqlList(workItemTypes)})`
-    : "";
+  const workItemTypeClause = buildWorkItemTypeClause(params.category);
 
   const areaClause = `AND [System.AreaPath] UNDER '${escapeWiqlString(params.areaPath)}'`;
 

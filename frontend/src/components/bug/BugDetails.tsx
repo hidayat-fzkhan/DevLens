@@ -5,6 +5,8 @@ import FolderOutlinedIcon from "@mui/icons-material/FolderOutlined";
 import LoopIcon from "@mui/icons-material/Loop";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import LocalOfferOutlinedIcon from "@mui/icons-material/LocalOfferOutlined";
+import UpdateOutlinedIcon from "@mui/icons-material/UpdateOutlined";
+import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
 import type { ApiTicket } from "../../types";
 import { formatDate } from "../../utils/formatters";
 
@@ -60,20 +62,51 @@ export function BugDetails({ bug, isDetailed = false }: BugDetailsProps) {
           {bug.state && (
             <Chip size="small" label={bug.state} color={getStateColor(bug.state)} />
           )}
+          {bug.priority !== undefined && (
+            <Chip
+              size="small"
+              variant="outlined"
+              label={`P${bug.priority}`}
+              sx={{ fontWeight: 600 }}
+            />
+          )}
+          {bug.severity && (
+            <Chip size="small" variant="outlined" label={`Sev: ${bug.severity}`} />
+          )}
+          {bug.storyPoints !== undefined && (
+            <Chip
+              size="small"
+              variant="outlined"
+              label={`${bug.storyPoints} pts`}
+              sx={{ fontWeight: 600 }}
+            />
+          )}
         </Stack>
       </Stack>
 
       <Stack direction="row" flexWrap="wrap" gap={2} sx={{ mt: 0.5 }}>
-        {bug.createdDate && (
-          <MetaItem
-            icon={<CalendarTodayOutlinedIcon sx={{ fontSize: 14 }} />}
-            text={formatDate(bug.createdDate)}
-          />
-        )}
         {bug.assignedTo && (
           <MetaItem
             icon={<PersonOutlineIcon sx={{ fontSize: 14 }} />}
-            text={bug.assignedTo}
+            text={`Assigned: ${bug.assignedTo}`}
+          />
+        )}
+        {bug.createdBy && (
+          <MetaItem
+            icon={<PersonOutlineIcon sx={{ fontSize: 14 }} />}
+            text={`Reported by: ${bug.createdBy}`}
+          />
+        )}
+        {bug.createdDate && (
+          <MetaItem
+            icon={<CalendarTodayOutlinedIcon sx={{ fontSize: 14 }} />}
+            text={`Created: ${formatDate(bug.createdDate)}`}
+          />
+        )}
+        {bug.changedDate && (
+          <MetaItem
+            icon={<UpdateOutlinedIcon sx={{ fontSize: 14 }} />}
+            text={`Last update: ${formatDate(bug.changedDate)}${bug.changedBy ? ` · ${bug.changedBy}` : ""}`}
           />
         )}
         {bug.areaPath && (
@@ -89,6 +122,38 @@ export function BugDetails({ bug, isDetailed = false }: BugDetailsProps) {
           />
         )}
       </Stack>
+
+      {(bug.resolvedDate || bug.resolvedBy || bug.resolvedReason) && (
+        <Stack
+          direction="row"
+          spacing={0.75}
+          alignItems="center"
+          flexWrap="wrap"
+          sx={(theme) => ({
+            mt: 0.5,
+            px: 1.25,
+            py: 0.5,
+            borderRadius: 1,
+            border: `1px solid ${theme.palette.border.muted}`,
+            backgroundColor: theme.palette.background.paper,
+            color: "text.secondary",
+          })}
+        >
+          <CheckCircleOutlineIcon sx={{ fontSize: 14, color: "success.main" }} />
+          <Typography variant="caption" sx={{ color: "text.primary", fontWeight: 600 }}>
+            Resolved
+          </Typography>
+          {bug.resolvedReason && (
+            <Typography variant="caption">· {bug.resolvedReason}</Typography>
+          )}
+          {bug.resolvedBy && (
+            <Typography variant="caption">· by {bug.resolvedBy}</Typography>
+          )}
+          {bug.resolvedDate && (
+            <Typography variant="caption">· {formatDate(bug.resolvedDate)}</Typography>
+          )}
+        </Stack>
+      )}
 
       {bug.tags && (
         <Stack direction="row" flexWrap="wrap" gap={0.5} alignItems="center">
@@ -159,6 +224,16 @@ export function BugDetails({ bug, isDetailed = false }: BugDetailsProps) {
           <SectionHeading>Acceptance Criteria</SectionHeading>
           <Typography variant="body2" sx={{ whiteSpace: "pre-line", mt: 0.5 }}>
             {bug.acceptanceCriteria}
+          </Typography>
+        </Box>
+      )}
+
+      {isDetailed && bug.nonFunctionalRequirements && (
+        <Box>
+          <Divider sx={{ my: 1.5 }} />
+          <SectionHeading>Non-Functional Requirements</SectionHeading>
+          <Typography variant="body2" sx={{ whiteSpace: "pre-line", mt: 0.5 }}>
+            {bug.nonFunctionalRequirements}
           </Typography>
         </Box>
       )}

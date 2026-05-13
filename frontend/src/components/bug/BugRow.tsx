@@ -1,7 +1,7 @@
 import { Box, Stack, Typography } from "@mui/material";
-import CalendarTodayOutlinedIcon from "@mui/icons-material/CalendarTodayOutlined";
 import PersonOutlineIcon from "@mui/icons-material/PersonOutlined";
 import FolderOutlinedIcon from "@mui/icons-material/FolderOutlined";
+import UpdateOutlinedIcon from "@mui/icons-material/UpdateOutlined";
 import type { ApiTicket } from "../../types";
 import { formatDate } from "../../utils/formatters";
 import { Mono } from "../../ui/Mono";
@@ -28,7 +28,7 @@ export function BugRow({ bug, onOpen }: BugRowProps) {
       onClick={() => onOpen(bug.id)}
       sx={(theme) => ({
         display: "grid",
-        gridTemplateColumns: "auto auto 1fr auto",
+        gridTemplateColumns: "auto auto auto 1fr auto",
         gap: 2,
         alignItems: "center",
         px: 2,
@@ -45,6 +45,14 @@ export function BugRow({ bug, onOpen }: BugRowProps) {
         tone={getStateTone(bug.state)}
         sx={{ minWidth: 64, justifyContent: "center" }}
       />
+
+      {bug.priority !== undefined ? (
+        <Mono size="sm" sx={{ color: "text.secondary", minWidth: 28 }}>
+          P{bug.priority}
+        </Mono>
+      ) : (
+        <Box sx={{ minWidth: 28 }} />
+      )}
 
       <Mono size="sm" sx={{ color: "text.secondary" }}>
         #{bug.id}
@@ -65,10 +73,10 @@ export function BugRow({ bug, onOpen }: BugRowProps) {
           {bug.assignedTo && (
             <RowMeta icon={<PersonOutlineIcon sx={{ fontSize: 12 }} />} text={bug.assignedTo} />
           )}
-          {bug.createdDate && (
+          {bug.changedDate && (
             <RowMeta
-              icon={<CalendarTodayOutlinedIcon sx={{ fontSize: 12 }} />}
-              text={formatDate(bug.createdDate)}
+              icon={<UpdateOutlinedIcon sx={{ fontSize: 12 }} />}
+              text={formatDate(bug.changedDate)}
             />
           )}
           {bug.areaPath && (
@@ -80,12 +88,19 @@ export function BugRow({ bug, onOpen }: BugRowProps) {
         </Stack>
       </Box>
 
-      <Typography
-        variant="caption"
-        sx={{ color: "text.disabled", whiteSpace: "nowrap", display: { xs: "none", md: "block" } }}
+      <Stack
+        direction="row"
+        spacing={1}
+        alignItems="center"
+        sx={{ color: "text.disabled", whiteSpace: "nowrap", display: { xs: "none", md: "flex" } }}
       >
-        {bug.workItemType}
-      </Typography>
+        {bug.storyPoints !== undefined && (
+          <Mono size="sm" sx={{ color: "text.secondary" }}>
+            {bug.storyPoints} pts
+          </Mono>
+        )}
+        <Typography variant="caption">{bug.workItemType}</Typography>
+      </Stack>
     </Box>
   );
 }

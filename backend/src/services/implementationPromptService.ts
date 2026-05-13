@@ -27,6 +27,9 @@ export async function buildImplementationPrompt(params: {
   const acceptanceCriteria = params.workItem.acceptanceCriteria
     ? stripHtmlToText(params.workItem.acceptanceCriteria)
     : undefined;
+  const nonFunctionalRequirements = params.workItem.nonFunctionalRequirements
+    ? stripHtmlToText(params.workItem.nonFunctionalRequirements)
+    : undefined;
 
   const repoLabelSummary = buildRepoLabelSummary(params.repos);
   const commits = await fetchAggregatedCommits({
@@ -70,6 +73,7 @@ export async function buildImplementationPrompt(params: {
       params.workItem.title,
       description,
       acceptanceCriteria,
+      nonFunctionalRequirements,
     ]
       .filter(Boolean)
       .join("\n\n");
@@ -94,6 +98,7 @@ export async function buildImplementationPrompt(params: {
     ticketTitle: params.workItem.title,
     ticketDescription: description,
     acceptanceCriteria,
+    nonFunctionalRequirements,
     repoContext,
     cachedAnalysis: cachedAnalysis ?? undefined,
     repoBranch: repoLabelSummary,

@@ -16,6 +16,7 @@ export function buildWorkItemFingerprint(workItem: AdoWorkItem): string {
     workItem.description,
     workItem.reproSteps,
     workItem.acceptanceCriteria,
+    workItem.nonFunctionalRequirements,
   ]
     .filter(Boolean)
     .join("|")
@@ -27,11 +28,13 @@ export function buildWorkItemText(workItem: {
   description?: string;
   reproSteps?: string;
   acceptanceCriteria?: string;
+  nonFunctionalRequirements?: string;
 }): {
   summary?: string;
   description?: string;
   reproSteps?: string;
   acceptanceCriteria?: string;
+  nonFunctionalRequirements?: string;
 } {
   const description = workItem.description
     ? stripHtmlToText(workItem.description)
@@ -42,6 +45,9 @@ export function buildWorkItemText(workItem: {
   const acceptanceCriteria = workItem.acceptanceCriteria
     ? stripHtmlToText(workItem.acceptanceCriteria)
     : undefined;
+  const nonFunctionalRequirements = workItem.nonFunctionalRequirements
+    ? stripHtmlToText(workItem.nonFunctionalRequirements)
+    : undefined;
   const summarySource =
     workItem.category === "bugs"
       ? repro || description
@@ -51,12 +57,13 @@ export function buildWorkItemText(workItem: {
     description,
     reproSteps: repro,
     acceptanceCriteria,
+    nonFunctionalRequirements,
     summary: summarySource ? truncate(summarySource, 600) : undefined,
   };
 }
 
 export function buildWorkItemResponse(workItem: AdoWorkItem) {
-  const { summary, description, reproSteps, acceptanceCriteria } =
+  const { summary, description, reproSteps, acceptanceCriteria, nonFunctionalRequirements } =
     buildWorkItemText(workItem);
 
   return {
@@ -66,15 +73,25 @@ export function buildWorkItemResponse(workItem: AdoWorkItem) {
     title: workItem.title,
     state: workItem.state,
     createdDate: workItem.createdDate,
+    createdBy: workItem.createdBy,
+    changedDate: workItem.changedDate,
+    changedBy: workItem.changedBy,
     assignedTo: workItem.assignedTo,
     areaPath: workItem.areaPath,
     iterationPath: workItem.iterationPath,
     tags: workItem.tags,
+    priority: workItem.priority,
+    severity: workItem.severity,
+    storyPoints: workItem.storyPoints,
+    resolvedDate: workItem.resolvedDate,
+    resolvedBy: workItem.resolvedBy,
+    resolvedReason: workItem.resolvedReason,
     webUrl: workItem.webUrl,
     summary,
     description,
     reproSteps,
     acceptanceCriteria,
+    nonFunctionalRequirements,
     aiAnalysis: undefined as unknown,
   };
 }

@@ -1,5 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { Box, Button, Card, CardContent, Chip, Stack, Typography } from "@mui/material";
+import {
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Stack,
+  Typography,
+} from "@mui/material";
 import FilterAltOutlinedIcon from "@mui/icons-material/FilterAltOutlined";
 import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
 import BugReportOutlinedIcon from "@mui/icons-material/BugReportOutlined";
@@ -10,6 +17,7 @@ import { EmptyState } from "./components/common/EmptyState";
 import { ErrorMessage } from "./components/common/ErrorMessage";
 import { Layout } from "./components/layout/Layout";
 import { RepoManager } from "./components/repos/RepoManager";
+import { FilterChipsBar } from "./components/settings/FilterChipsBar";
 import { FiltersManager } from "./components/settings/FiltersManager";
 import { SearchBar } from "./components/search/SearchBar";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
@@ -27,14 +35,17 @@ type AppRoute =
 
 function parsePath(pathname: string): AppRoute {
   if (pathname === "/") return { page: "home" };
-  if (pathname === "/settings" || pathname === "/repos") return { page: "settings" };
+  if (pathname === "/settings" || pathname === "/repos")
+    return { page: "settings" };
 
   const listMatch = /^\/(bugs|user-stories)$/.exec(pathname);
   if (listMatch) {
     return { page: "list", category: listMatch[1] as TicketCategory };
   }
 
-  const detailMatch = /^\/(bugs|user-stories)\/analyze\/([^/]+)$/.exec(pathname);
+  const detailMatch = /^\/(bugs|user-stories)\/analyze\/([^/]+)$/.exec(
+    pathname,
+  );
   if (detailMatch) {
     return {
       page: "detail",
@@ -100,9 +111,13 @@ export default function App() {
     runAnalysis,
     loadImplementationPrompt,
   } = useTickets(currentCategory);
-  const [activeFilters, setActiveFilters] = useState<WorkItemFilters | null>(null);
+  const [activeFilters, setActiveFilters] = useState<WorkItemFilters | null>(
+    null,
+  );
 
-  const categoryMeta = currentCategory ? getCategoryMeta(currentCategory) : null;
+  const categoryMeta = currentCategory
+    ? getCategoryMeta(currentCategory)
+    : null;
 
   useEffect(() => {
     const handlePopState = () => {
@@ -122,7 +137,8 @@ export default function App() {
     void load(routeTicketId);
   }, [currentCategory, load, reset, routePage, routeTicketId, setQuery]);
 
-  const selectedTicket = tickets.length === 1 && selectedTicketId ? tickets[0] : null;
+  const selectedTicket =
+    tickets.length === 1 && selectedTicketId ? tickets[0] : null;
 
   useEffect(() => {
     if (route.page !== "detail" || !selectedTicket) return;
@@ -204,14 +220,17 @@ export default function App() {
     <Stack spacing={4}>
       <Box>
         <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 1 }}>
-          <PsychologyOutlinedIcon sx={{ fontSize: 32, color: "primary.main" }} />
+          <PsychologyOutlinedIcon
+            sx={{ fontSize: 32, color: "primary.main" }}
+          />
           <Typography variant="h2" fontWeight={600}>
             Welcome to DevLens
           </Typography>
         </Stack>
         <Typography color="text.secondary" sx={{ maxWidth: 560 }}>
-          Pull work items from Azure DevOps, enrich them with GitHub commit history, and get
-          AI-powered triage and implementation guidance via Claude.
+          Pull work items from Azure DevOps, enrich them with GitHub commit
+          history, and get AI-powered triage and implementation guidance via
+          Claude.
         </Typography>
       </Box>
 
@@ -219,7 +238,10 @@ export default function App() {
         <WelcomeCard
           icon={
             <BugReportOutlinedIcon
-              sx={(theme) => ({ fontSize: 28, color: theme.palette.category.bugs })}
+              sx={(theme) => ({
+                fontSize: 28,
+                color: theme.palette.category.bugs,
+              })}
             />
           }
           title="Bugs & Defects"
@@ -229,7 +251,10 @@ export default function App() {
         <WelcomeCard
           icon={
             <AutoStoriesOutlinedIcon
-              sx={(theme) => ({ fontSize: 28, color: theme.palette.category.stories })}
+              sx={(theme) => ({
+                fontSize: 28,
+                color: theme.palette.category.stories,
+              })}
             />
           }
           title="User Stories"
@@ -247,7 +272,8 @@ export default function App() {
           Settings
         </Typography>
         <Typography color="text.secondary" sx={{ mt: 0.5 }}>
-          Configure which Azure DevOps work items DevLens loads and which GitHub repositories it analyzes them against.
+          Configure which Azure DevOps work items DevLens loads and which GitHub
+          repositories it analyzes them against.
         </Typography>
       </Box>
       <FiltersManager />
@@ -274,55 +300,43 @@ export default function App() {
       </Stack>
 
       {!selectedTicket && filtersConfigured && activeFilters?.areaPath && (
-        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
-          <FilterAltOutlinedIcon sx={{ fontSize: 16, color: "text.disabled" }} />
-          <Chip
-            label={`Area: ${activeFilters.areaPath.split("\\").pop() ?? activeFilters.areaPath}`}
-            size="small"
-            variant="outlined"
-          />
-          {activeFilters.iterationPath && (
-            <Chip
-              label={`Sprint: ${activeFilters.iterationPath.split("\\").pop() ?? activeFilters.iterationPath}`}
-              size="small"
-              variant="outlined"
-            />
-          )}
-          {activeFilters.states.length > 0 && (
-            <Chip
-              label={`States: ${activeFilters.states.join(", ")}`}
-              size="small"
-              variant="outlined"
-            />
-          )}
-          <Button
-            size="small"
-            variant="text"
-            startIcon={<SettingsOutlinedIcon fontSize="small" />}
-            onClick={() => handleHeaderNavigate("/settings")}
-            sx={{ ml: "auto" }}
-          >
-            Change
-          </Button>
-        </Stack>
+        <FilterChipsBar
+          filters={activeFilters}
+          onChange={(next) => {
+            setActiveFilters(next);
+            void load();
+          }}
+          onOpenSettings={() => handleHeaderNavigate("/settings")}
+        />
       )}
 
       {error && <ErrorMessage message={error} />}
 
       {generatedAt && (
         <Typography variant="caption" color="text.secondary">
+          {!selectedTicket && filtersConfigured && (
+            <>
+              {tickets.length} {tickets.length === 1 ? "item" : "items"} ·{" "}
+            </>
+          )}
           Updated: {formatDate(generatedAt)}
         </Typography>
       )}
 
       {selectedTicket && (
-        <Button variant="text" onClick={showLatestTickets} sx={{ alignSelf: "flex-start", pl: 0 }}>
+        <Button
+          variant="text"
+          onClick={showLatestTickets}
+          sx={{ alignSelf: "flex-start", pl: 0 }}
+        >
           ← {categoryMeta?.backLabel}
         </Button>
       )}
 
       {!filtersConfigured && !selectedTicket ? (
-        <FiltersNotConfiguredState onConfigure={() => handleHeaderNavigate("/settings")} />
+        <FiltersNotConfiguredState
+          onConfigure={() => handleHeaderNavigate("/settings")}
+        />
       ) : tickets.length === 0 && !loading ? (
         <EmptyState message={categoryMeta?.emptyMessage} />
       ) : (
@@ -352,7 +366,8 @@ export default function App() {
       <Stack spacing={3}>
         {route.page === "home" && renderWelcomePage()}
         {route.page === "settings" && renderSettingsPage()}
-        {(route.page === "list" || route.page === "detail") && renderCategoryPage()}
+        {(route.page === "list" || route.page === "detail") &&
+          renderCategoryPage()}
       </Stack>
     </Layout>
   );
@@ -369,18 +384,28 @@ type FiltersNotConfiguredStateProps = Readonly<{
   onConfigure: () => void;
 }>;
 
-function FiltersNotConfiguredState({ onConfigure }: FiltersNotConfiguredStateProps) {
+function FiltersNotConfiguredState({
+  onConfigure,
+}: FiltersNotConfiguredStateProps) {
   return (
     <Card variant="outlined" sx={{ borderStyle: "dashed" }}>
       <CardContent sx={{ py: 5, textAlign: "center" }}>
         <Stack spacing={1.5} alignItems="center">
-          <FilterAltOutlinedIcon sx={{ fontSize: 40, color: "text.disabled" }} />
+          <FilterAltOutlinedIcon
+            sx={{ fontSize: 40, color: "text.disabled" }}
+          />
           <Box>
             <Typography variant="h4" fontWeight={600}>
               No filters configured
             </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, maxWidth: 460, mx: "auto" }}>
-              Choose an area path (and optionally an iteration) so DevLens knows which work items to load. You can also search by ID directly from the bar above.
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{ mt: 0.5, maxWidth: 460, mx: "auto" }}
+            >
+              Choose an area path (and optionally an iteration) so DevLens knows
+              which work items to load. You can also search by ID directly from
+              the bar above.
             </Typography>
           </Box>
           <Button
