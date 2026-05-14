@@ -1,5 +1,10 @@
 import { basicPatAuthHeader, httpJson } from "./http.js";
-import type { AdoWorkItem, AdoWorkItemFields, WorkItemCategory } from "./types.js";
+import type {
+  AdoAttachment,
+  AdoWorkItem,
+  AdoWorkItemFields,
+  WorkItemCategory,
+} from "./types.js";
 
 type WiqlResponse = {
   workItems: Array<{ id: number; url: string }>;
@@ -10,6 +15,7 @@ type WorkItemsResponse = {
     id: number;
     url: string;
     fields?: AdoWorkItemFields;
+    relations?: unknown;
   }>;
 };
 
@@ -34,7 +40,7 @@ function buildWiqlList(values: string[]): string {
   return values.map((value) => `'${escapeWiqlString(value)}'`).join(", ");
 }
 
-function orgToBaseUrl(adoOrg: string): string {
+export function orgToBaseUrl(adoOrg: string): string {
   const trimmed = adoOrg.trim();
   if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
     return trimmed.replace(/\/+$/, "");
@@ -89,6 +95,80 @@ function pickNonFunctionalRequirements(fields: AdoWorkItemFields | undefined): s
   return undefined;
 }
 
+type AdoRelation = {
+  rel?: string;
+  url?: string;
+  attributes?: Record<string, unknown>;
+};
+
+const IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".svg"]);
+
+function inferImageFromName(name: string): boolean {
+  const lower = name.toLowerCase();
+  const dot = lower.lastIndexOf(".");
+  if (dot < 0) return false;
+  return IMAGE_EXTENSIONS.has(lower.slice(dot));
+}
+
+function inferContentTypeFromName(name: string): string | undefined {
+  const lower = name.toLowerCase();
+  if (lower.endsWith(".png")) return "image/png";
+  if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
+  if (lower.endsWith(".gif")) return "image/gif";
+  if (lower.endsWith(".webp")) return "image/webp";
+  if (lower.endsWith(".bmp")) return "image/bmp";
+  if (lower.endsWith(".svg")) return "image/svg+xml";
+  return undefined;
+}
+
+function extractAttachmentGuid(url: string): string | undefined {
+  // ADO attachment URLs end in /_apis/wit/attachments/{guid}?...
+  const match = /\/attachments\/([0-9a-f-]{8,})/i.exec(url);
+  return match?.[1];
+}
+
+function pickAttachments(item: { relations?: unknown }): AdoAttachment[] {
+  const raw = Array.isArray(item.relations) ? (item.relations as AdoRelation[]) : [];
+  const attachments: AdoAttachment[] = [];
+
+  for (const rel of raw) {
+    if (rel.rel !== "AttachedFile" || typeof rel.url !== "string") continue;
+    const guid = extractAttachmentGuid(rel.url);
+    if (!guid) continue;
+    const attrs = rel.attributes ?? {};
+    const name =
+      (typeof attrs["name"] === "string" && (attrs["name"] as string)) ||
+      (typeof attrs["originalName"] === "string" && (attrs["originalName"] as string)) ||
+      guid;
+    const sizeRaw = attrs["resourceSize"];
+    const size = typeof sizeRaw === "number" ? sizeRaw : undefined;
+    const addedAt =
+      typeof attrs["resourceCreatedDate"] === "string"
+        ? (attrs["resourceCreatedDate"] as string)
+        : typeof attrs["authorizedDate"] === "string"
+          ? (attrs["authorizedDate"] as string)
+          : undefined;
+    const addedBy =
+      typeof attrs["authorizedBy"] === "object" && attrs["authorizedBy"] !== null
+        ? ((attrs["authorizedBy"] as Record<string, unknown>)["displayName"] as string | undefined)
+        : undefined;
+    const contentType = inferContentTypeFromName(name);
+
+    attachments.push({
+      id: guid,
+      name,
+      url: rel.url,
+      size,
+      addedAt,
+      addedBy,
+      contentType,
+      isImage: inferImageFromName(name),
+    });
+  }
+
+  return attachments;
+}
+
 function getCategoryForWorkItemType(workItemType: string | undefined): WorkItemCategory {
   if (workItemType && BUG_TYPE_SET.has(workItemType)) {
     return "bugs";
@@ -96,7 +176,11 @@ function getCategoryForWorkItemType(workItemType: string | undefined): WorkItemC
   return "user-stories";
 }
 
-function mapWorkItem(item: { id: number; url: string; fields?: AdoWorkItemFields }, baseUrl: string, projectPath: string): AdoWorkItem {
+function mapWorkItem(
+  item: { id: number; url: string; fields?: AdoWorkItemFields; relations?: unknown },
+  baseUrl: string,
+  projectPath: string,
+): AdoWorkItem {
   const fields = item.fields;
   const workItemType = pickString(fields, "System.WorkItemType") ?? "Unknown";
   const category = getCategoryForWorkItemType(workItemType);
@@ -127,6 +211,7 @@ function mapWorkItem(item: { id: number; url: string; fields?: AdoWorkItemFields
       pickString(fields, "Microsoft.VSTS.TCM.SystemInfo"),
     acceptanceCriteria: pickString(fields, "Microsoft.VSTS.Common.AcceptanceCriteria"),
     nonFunctionalRequirements: pickNonFunctionalRequirements(fields),
+    attachments: pickAttachments(item),
     url: item.url,
     webUrl: `${baseUrl}/${projectPath}/_workitems/edit/${item.id}`,
   } satisfies AdoWorkItem;
@@ -321,7 +406,8 @@ export async function fetchWorkItemById(params: {
   const projectPath = encodeURIComponent(params.project);
   const auth = basicPatAuthHeader(params.pat);
 
-  const workItemUrl = `${baseUrl}/_apis/wit/workitems?ids=${params.id}&$expand=fields&api-version=7.0`;
+  // $expand=all returns fields + relations (which include attachment metadata).
+  const workItemUrl = `${baseUrl}/_apis/wit/workitems?ids=${params.id}&$expand=all&api-version=7.0`;
   const itemsResp = await httpJson<WorkItemsResponse>(workItemUrl, {
     headers: {
       Authorization: auth

@@ -1,5 +1,6 @@
 import type {
   ApiAreasResponse,
+  ApiCleanupResponse,
   ApiImplementationPromptResponse,
   ApiIterationsResponse,
   ApiRepoResponse,
@@ -41,6 +42,21 @@ function parseErrorBody(text: string, status: number): string {
     // fall through
   }
   return text || `Request failed: ${status}`;
+}
+
+export async function fetchTicketCleanup(
+  category: TicketCategory,
+  ticketId: number,
+  signal?: AbortSignal,
+): Promise<ApiCleanupResponse> {
+  const base = getApiBase();
+  const url = `${base}/api/${category}/${ticketId}/cleanup`;
+  const res = await fetch(url, { signal });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(parseErrorBody(text, res.status));
+  }
+  return (await res.json()) as ApiCleanupResponse;
 }
 
 export async function fetchTicketAnalysis(

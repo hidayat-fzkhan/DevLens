@@ -8,7 +8,7 @@ export type WorkItemFilters = {
   states: string[];
 };
 
-const DEFAULT_STATES = ["New", "Active"];
+const DEFAULT_STATES = ["New", "Active", "Ready To Work"];
 
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
 const dataDir = path.resolve(moduleDir, "..", "data");
@@ -17,14 +17,21 @@ const dataFile = path.join(dataDir, "settings.json");
 let cache: WorkItemFilters | undefined;
 let writeQueue: Promise<void> = Promise.resolve();
 
-function normalize(value: Partial<WorkItemFilters> | undefined): WorkItemFilters {
-  const areaPath = typeof value?.areaPath === "string" && value.areaPath.trim().length > 0
-    ? value.areaPath.trim()
-    : undefined;
-  const iterationPath = typeof value?.iterationPath === "string" && value.iterationPath.trim().length > 0
-    ? value.iterationPath.trim()
-    : undefined;
-  const rawStates = Array.isArray(value?.states) ? value!.states : DEFAULT_STATES;
+function normalize(
+  value: Partial<WorkItemFilters> | undefined,
+): WorkItemFilters {
+  const areaPath =
+    typeof value?.areaPath === "string" && value.areaPath.trim().length > 0
+      ? value.areaPath.trim()
+      : undefined;
+  const iterationPath =
+    typeof value?.iterationPath === "string" &&
+    value.iterationPath.trim().length > 0
+      ? value.iterationPath.trim()
+      : undefined;
+  const rawStates = Array.isArray(value?.states)
+    ? value!.states
+    : DEFAULT_STATES;
   const states = rawStates
     .map((s) => (typeof s === "string" ? s.trim() : ""))
     .filter((s) => s.length > 0);
@@ -65,7 +72,9 @@ export async function getSettings(): Promise<WorkItemFilters> {
   return cache;
 }
 
-export async function saveSettings(value: Partial<WorkItemFilters>): Promise<WorkItemFilters> {
+export async function saveSettings(
+  value: Partial<WorkItemFilters>,
+): Promise<WorkItemFilters> {
   const next = normalize(value);
   cache = next;
   await writeToDisk(next);

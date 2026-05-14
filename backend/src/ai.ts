@@ -11,6 +11,7 @@ const MAX_COMMIT_MESSAGE_CHARS = 140;
 const MAX_OUTPUT_TOKENS_BUG = 900;
 const MAX_OUTPUT_TOKENS_USER_STORY = 1400;
 const MAX_OUTPUT_TOKENS_IMPL_PROMPT = 1800;
+const MAX_OUTPUT_TOKENS_CLEANUP = 1200;
 
 function truncate(input: string, maxChars: number): string {
   if (input.length <= maxChars) {
@@ -515,5 +516,171 @@ export async function analyzeWithAI(
     }
 
     return normalizeAnalysisResult({}, responseText, params.analysisType);
+  }
+}
+
+export type CleanupResult = {
+  status: "ready" | "not-enough-data";
+  summary: string;
+  problem?: string;
+  expectedBehavior?: string;
+  currentBehavior?: string;
+  reproSteps?: string[];
+  acceptanceCriteria?: string[];
+  nonFunctional?: string[];
+  openQuestions?: string[];
+};
+
+export type CleanupParams = {
+  analysisType: WorkItemAnalysisType;
+  ticketTitle: string;
+  ticketDescription?: string;
+  reproSteps?: string;
+  acceptanceCriteria?: string;
+  nonFunctionalRequirements?: string;
+  anthropicKey: string;
+  anthropicModel: string;
+};
+
+function asStringArray(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const cleaned = value
+    .filter((v): v is string => typeof v === "string")
+    .map((v) => v.trim())
+    .filter((v) => v.length > 0);
+  return cleaned.length > 0 ? cleaned : undefined;
+}
+
+function normalizeCleanupResult(parsed: Record<string, unknown>, fallback: string): CleanupResult {
+  const summary =
+    typeof parsed.summary === "string" && parsed.summary.trim().length > 0
+      ? parsed.summary.trim()
+      : fallback;
+  return {
+    status: "ready",
+    summary,
+    problem: typeof parsed.problem === "string" ? parsed.problem.trim() : undefined,
+    expectedBehavior:
+      typeof parsed.expectedBehavior === "string" ? parsed.expectedBehavior.trim() : undefined,
+    currentBehavior:
+      typeof parsed.currentBehavior === "string" ? parsed.currentBehavior.trim() : undefined,
+    reproSteps: asStringArray(parsed.reproSteps),
+    acceptanceCriteria: asStringArray(parsed.acceptanceCriteria),
+    nonFunctional: asStringArray(parsed.nonFunctional),
+    openQuestions: asStringArray(parsed.openQuestions),
+  };
+}
+
+export function hasEnoughDataForCleanup(params: {
+  ticketDescription?: string;
+  reproSteps?: string;
+  acceptanceCriteria?: string;
+  nonFunctionalRequirements?: string;
+}): boolean {
+  const combined = [
+    params.ticketDescription,
+    params.reproSteps,
+    params.acceptanceCriteria,
+    params.nonFunctionalRequirements,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .replaceAll(/\s+/g, " ")
+    .trim();
+  if (!combined) return false;
+  return combined.length >= 50;
+}
+
+export async function cleanupWorkItem(params: CleanupParams): Promise<CleanupResult> {
+  const description = compactText(params.ticketDescription, MAX_BUG_FIELD_CHARS * 2);
+  const reproSteps = compactText(params.reproSteps, MAX_BUG_FIELD_CHARS * 2);
+  const acceptanceCriteria = compactText(params.acceptanceCriteria, MAX_BUG_FIELD_CHARS * 2);
+  const nonFunctionalRequirements = compactText(
+    params.nonFunctionalRequirements,
+    MAX_NFR_CHARS,
+  );
+
+  if (
+    !hasEnoughDataForCleanup({
+      ticketDescription: description,
+      reproSteps,
+      acceptanceCriteria,
+      nonFunctionalRequirements,
+    })
+  ) {
+    return {
+      status: "not-enough-data",
+      summary: "Not enough content to refine.",
+    };
+  }
+
+  const isBug = params.analysisType === "bug";
+  const systemPrompt = [
+    "You normalize messy Azure DevOps work-item text into a clean, structured restatement.",
+    "Use ONLY information present in the source — never invent facts, names, or APIs.",
+    "Deduplicate content that appears in multiple fields (description vs. repro steps is common).",
+    "If a field is genuinely missing in the source, omit it from the JSON.",
+    "Return strict JSON only — no preamble, no markdown fences.",
+  ].join(" ");
+
+  const sourceBlock = [
+    `Title: ${params.ticketTitle}`,
+    description ? `Description:\n${description}` : undefined,
+    isBug && reproSteps ? `Repro steps / additional details:\n${reproSteps}` : undefined,
+    !isBug && acceptanceCriteria ? `Acceptance criteria:\n${acceptanceCriteria}` : undefined,
+    nonFunctionalRequirements
+      ? `Non-functional requirements (APIs, services, constraints):\n${nonFunctionalRequirements}`
+      : undefined,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+
+  const schemaInstructions = isBug
+    ? [
+        "Return JSON shape:",
+        '{"summary":"","problem":"","expectedBehavior":"","currentBehavior":"","reproSteps":["step"],"nonFunctional":["bullet"],"openQuestions":["question"]}',
+        "Rules:",
+        "- summary: 1–2 plain-language sentences stating what is broken.",
+        "- problem: one short paragraph framing the bug from the user's perspective.",
+        "- expectedBehavior and currentBehavior: short paragraphs, no markdown.",
+        "- reproSteps: ordered list, one action per array item, max 8 items.",
+        "- nonFunctional: bulletize any APIs/services/constraints from the NFR section, max 6 items.",
+        "- openQuestions: at most 3 questions for missing info; omit the field entirely if none.",
+      ].join("\n")
+    : [
+        "Return JSON shape:",
+        '{"summary":"","problem":"","acceptanceCriteria":["criterion"],"nonFunctional":["bullet"],"openQuestions":["question"]}',
+        "Rules:",
+        "- summary: 1–2 plain-language sentences stating what the user wants and why.",
+        "- problem: one short paragraph framing the need from the user's perspective.",
+        "- acceptanceCriteria: one criterion per array item, max 8 items, written as testable statements.",
+        "- nonFunctional: bulletize any APIs/services/constraints from the NFR section, max 6 items.",
+        "- openQuestions: at most 3 questions for missing info; omit the field entirely if none.",
+      ].join("\n");
+
+  const userPrompt = [sourceBlock, schemaInstructions].join("\n\n");
+
+  const anthropic = new Anthropic({ apiKey: params.anthropicKey });
+  const response = await anthropic.messages.create({
+    model: params.anthropicModel,
+    system: systemPrompt,
+    max_tokens: MAX_OUTPUT_TOKENS_CLEANUP,
+    messages: [{ role: "user", content: userPrompt }],
+  });
+
+  const content = response.content[0];
+  if (content.type !== "text") {
+    throw new Error("Unexpected response type from AI");
+  }
+  const text = stripCodeFences(content.text);
+
+  try {
+    const parsed = JSON.parse(text) as Record<string, unknown>;
+    return normalizeCleanupResult(parsed, text);
+  } catch {
+    return {
+      status: "ready",
+      summary: text,
+    };
   }
 }

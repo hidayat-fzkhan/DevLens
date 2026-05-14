@@ -4,6 +4,17 @@ export type WorkItemCategory = "bugs" | "user-stories";
 
 export type WorkItemAnalysisType = "bug" | "user-story";
 
+export type AdoAttachment = {
+  id: string;
+  name: string;
+  url: string;
+  size?: number;
+  addedAt?: string;
+  addedBy?: string;
+  contentType?: string;
+  isImage: boolean;
+};
+
 export type AdoWorkItem = {
   id: number;
   category: WorkItemCategory;
@@ -28,6 +39,7 @@ export type AdoWorkItem = {
   reproSteps?: string;
   acceptanceCriteria?: string;
   nonFunctionalRequirements?: string;
+  attachments?: AdoAttachment[];
   url?: string;
   webUrl?: string;
 };

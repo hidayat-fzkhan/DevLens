@@ -101,6 +101,10 @@ export default function App() {
     analysisError,
     promptLoading,
     promptError,
+    cleanup,
+    cleanupLoading,
+    cleanupError,
+    cleanupTicketId,
     tickets,
     selectedTicketId,
     generatedAt,
@@ -109,6 +113,7 @@ export default function App() {
     reset,
     handleStop,
     runAnalysis,
+    loadCleanup,
     loadImplementationPrompt,
   } = useTickets(currentCategory);
   const [activeFilters, setActiveFilters] = useState<WorkItemFilters | null>(
@@ -149,6 +154,13 @@ export default function App() {
       title: selectedTicket.title,
     });
   }, [record, route, selectedTicket]);
+
+  useEffect(() => {
+    if (route.page !== "detail" || !selectedTicket) return;
+    if (String(selectedTicket.id) !== route.ticketId) return;
+    if (cleanupTicketId === selectedTicket.id) return;
+    void loadCleanup(selectedTicket.id);
+  }, [cleanupTicketId, loadCleanup, route, selectedTicket]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -349,6 +361,9 @@ export default function App() {
           analysisError={analysisError}
           promptLoading={promptLoading}
           promptError={promptError}
+          cleanup={cleanup}
+          cleanupLoading={cleanupLoading}
+          cleanupError={cleanupError}
           onAnalyze={runAnalysis}
           onGeneratePrompt={loadImplementationPrompt}
         />

@@ -1,5 +1,16 @@
 export type TicketCategory = "bugs" | "user-stories";
 
+export type ApiAttachment = {
+  id: string;
+  name: string;
+  url: string;
+  size?: number;
+  addedAt?: string;
+  addedBy?: string;
+  contentType?: string;
+  isImage: boolean;
+};
+
 export type ApiTicketAnalysis = {
   analysisType: "bug" | "user-story";
   status: "ready" | "not-enough-data";
@@ -43,6 +54,7 @@ export type ApiTicket = {
   reproSteps?: string;
   acceptanceCriteria?: string;
   nonFunctionalRequirements?: string;
+  attachments?: ApiAttachment[];
   aiAnalysis?: ApiTicketAnalysis;
   implementationPrompt?: string;
 };
@@ -93,6 +105,24 @@ export type ApiTicketAnalysisResponse = {
   generatedAt: string;
   ticketId: number;
   aiAnalysis: ApiTicketAnalysis;
+};
+
+export type ApiCleanupResult = {
+  status: "ready" | "not-enough-data";
+  summary: string;
+  problem?: string;
+  expectedBehavior?: string;
+  currentBehavior?: string;
+  reproSteps?: string[];
+  acceptanceCriteria?: string[];
+  nonFunctional?: string[];
+  openQuestions?: string[];
+};
+
+export type ApiCleanupResponse = {
+  generatedAt: string;
+  ticketId: number;
+  cleanup: ApiCleanupResult;
 };
 
 export type Repo = {

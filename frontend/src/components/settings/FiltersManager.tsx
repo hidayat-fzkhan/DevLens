@@ -20,14 +20,18 @@ import {
   fetchSettings,
   saveSettings,
 } from "../../services/api";
-import type {
-  AreaPath,
-  IterationPath,
-  WorkItemFilters,
-} from "../../types";
+import type { AreaPath, IterationPath, WorkItemFilters } from "../../types";
 import { useToast } from "../common/ToastProvider";
 
-const COMMON_STATES = ["New", "Defined", "Active", "Resolved", "Closed", "Removed"];
+const COMMON_STATES = [
+  "New",
+  "Defined",
+  "Ready To Work",
+  "Active",
+  "Resolved",
+  "Closed",
+  "Removed",
+];
 
 function formatRange(start?: string, finish?: string): string {
   if (!start && !finish) return "";
@@ -120,12 +124,7 @@ export function FiltersManager() {
   return (
     <Card variant="outlined">
       <CardContent>
-        <Stack
-          direction="row"
-          alignItems="center"
-          spacing={1}
-          sx={{ mb: 2 }}
-        >
+        <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
           <FilterAltOutlinedIcon sx={{ color: "text.secondary" }} />
           <Typography variant="h6" fontWeight={600}>
             Work item filters
@@ -133,11 +132,17 @@ export function FiltersManager() {
         </Stack>
 
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Applied to both Bugs and User Stories. Area path is required — the list pages stay empty until one is selected. Iteration narrows the result to a specific sprint.
+          Applied to both Bugs and User Stories. Area path is required — the
+          list pages stay empty until one is selected. Iteration narrows the
+          result to a specific sprint.
         </Typography>
 
         {loadError && (
-          <Alert severity="error" sx={{ mb: 2 }} onClose={() => setLoadError(null)}>
+          <Alert
+            severity="error"
+            sx={{ mb: 2 }}
+            onClose={() => setLoadError(null)}
+          >
             {loadError}
           </Alert>
         )}
@@ -185,7 +190,9 @@ export function FiltersManager() {
               getOptionLabel={(opt) => opt.path}
               isOptionEqualToValue={(opt, value) => opt.path === value.path}
               renderOption={(props, option) => {
-                const { key, ...rest } = props as { key: string } & React.HTMLAttributes<HTMLLIElement>;
+                const { key, ...rest } = props as {
+                  key: string;
+                } & React.HTMLAttributes<HTMLLIElement>;
                 const isCurrent =
                   currentIteration && option.path === currentIteration.path;
                 return (
@@ -196,7 +203,12 @@ export function FiltersManager() {
                           {option.name}
                         </Typography>
                         {isCurrent && (
-                          <Chip label="Current" size="small" color="primary" sx={{ height: 18 }} />
+                          <Chip
+                            label="Current"
+                            size="small"
+                            color="primary"
+                            sx={{ height: 18 }}
+                          />
                         )}
                       </Stack>
                       <Typography variant="caption" color="text.secondary">
@@ -222,7 +234,12 @@ export function FiltersManager() {
               <Typography variant="overline" color="text.secondary">
                 Work item states
               </Typography>
-              <Stack direction="row" flexWrap="wrap" gap={0.75} sx={{ mt: 0.5 }}>
+              <Stack
+                direction="row"
+                flexWrap="wrap"
+                gap={0.75}
+                sx={{ mt: 0.5 }}
+              >
                 {COMMON_STATES.map((state) => {
                   const isSelected = filters.states.includes(state);
                   return (
@@ -238,8 +255,13 @@ export function FiltersManager() {
                 })}
               </Stack>
               {filters.states.length === 0 && (
-                <Typography variant="caption" color="warning.main" sx={{ display: "block", mt: 0.5 }}>
-                  At least one state required — defaults to New + Active when saved.
+                <Typography
+                  variant="caption"
+                  color="warning.main"
+                  sx={{ display: "block", mt: 0.5 }}
+                >
+                  At least one state required — defaults to New + Active when
+                  saved.
                 </Typography>
               )}
             </Box>

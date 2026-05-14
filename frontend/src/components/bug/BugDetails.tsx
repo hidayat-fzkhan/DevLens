@@ -9,6 +9,7 @@ import UpdateOutlinedIcon from "@mui/icons-material/UpdateOutlined";
 import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
 import type { ApiTicket } from "../../types";
 import { formatDate } from "../../utils/formatters";
+import { Attachments } from "./Attachments";
 
 type BugDetailsProps = Readonly<{
   bug: ApiTicket;
@@ -52,7 +53,11 @@ export function BugDetails({ bug, isDetailed = false }: BugDetailsProps) {
   return (
     <>
       <Stack spacing={0.75}>
-        <Typography variant="h6" fontWeight={600} sx={{ lineHeight: 1.3 }}>
+        <Typography
+          variant="h6"
+          fontWeight={600}
+          sx={{ lineHeight: 1.3, overflowWrap: "anywhere" }}
+        >
           {bug.title}
         </Typography>
 
@@ -192,7 +197,7 @@ export function BugDetails({ bug, isDetailed = false }: BugDetailsProps) {
       {bug.summary && !isDetailed && (
         <Box>
           <SectionHeading>Summary</SectionHeading>
-          <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: "pre-line", mt: 0.5 }}>
+          <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: "pre-line", mt: 0.5, overflowWrap: "anywhere" }}>
             {bug.summary}
           </Typography>
         </Box>
@@ -202,7 +207,7 @@ export function BugDetails({ bug, isDetailed = false }: BugDetailsProps) {
         <Box>
           <Divider sx={{ my: 1.5 }} />
           <SectionHeading>{isBug ? "Bug Description" : "User Story Description"}</SectionHeading>
-          <Typography variant="body2" sx={{ whiteSpace: "pre-line", mt: 0.5 }}>
+          <Typography variant="body2" sx={{ whiteSpace: "pre-line", mt: 0.5, overflowWrap: "anywhere" }}>
             {bug.description}
           </Typography>
         </Box>
@@ -212,7 +217,7 @@ export function BugDetails({ bug, isDetailed = false }: BugDetailsProps) {
         <Box>
           <Divider sx={{ my: 1.5 }} />
           <SectionHeading>Repro Steps / Additional Details</SectionHeading>
-          <Typography variant="body2" sx={{ whiteSpace: "pre-line", mt: 0.5 }}>
+          <Typography variant="body2" sx={{ whiteSpace: "pre-line", mt: 0.5, overflowWrap: "anywhere" }}>
             {bug.reproSteps}
           </Typography>
         </Box>
@@ -222,7 +227,7 @@ export function BugDetails({ bug, isDetailed = false }: BugDetailsProps) {
         <Box>
           <Divider sx={{ my: 1.5 }} />
           <SectionHeading>Acceptance Criteria</SectionHeading>
-          <Typography variant="body2" sx={{ whiteSpace: "pre-line", mt: 0.5 }}>
+          <Typography variant="body2" sx={{ whiteSpace: "pre-line", mt: 0.5, overflowWrap: "anywhere" }}>
             {bug.acceptanceCriteria}
           </Typography>
         </Box>
@@ -232,9 +237,16 @@ export function BugDetails({ bug, isDetailed = false }: BugDetailsProps) {
         <Box>
           <Divider sx={{ my: 1.5 }} />
           <SectionHeading>Non-Functional Requirements</SectionHeading>
-          <Typography variant="body2" sx={{ whiteSpace: "pre-line", mt: 0.5 }}>
+          <Typography variant="body2" sx={{ whiteSpace: "pre-line", mt: 0.5, overflowWrap: "anywhere" }}>
             {bug.nonFunctionalRequirements}
           </Typography>
+        </Box>
+      )}
+
+      {isDetailed && bug.attachments && bug.attachments.length > 0 && (
+        <Box>
+          <Divider sx={{ my: 1.5 }} />
+          <Attachments attachments={bug.attachments} />
         </Box>
       )}
     </>

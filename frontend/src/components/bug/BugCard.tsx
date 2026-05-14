@@ -1,9 +1,10 @@
 import { Box, Card, CardContent, Stack } from "@mui/material";
 import { useState } from "react";
-import type { ApiTicket } from "../../types";
+import type { ApiCleanupResult, ApiTicket } from "../../types";
 import { AIAnalysis } from "./AIAnalysis";
 import { AnalysisSkeleton } from "./AnalysisSkeleton";
 import { BugDetails } from "./BugDetails";
+import { CleanedContent } from "./CleanedContent";
 import { ImplementationPrompt } from "./ImplementationPrompt";
 import { ErrorMessage } from "../common/ErrorMessage";
 import { RepoSelector } from "../repos/RepoSelector";
@@ -14,6 +15,9 @@ type BugCardProps = Readonly<{
   analysisError?: string | null;
   promptLoading?: boolean;
   promptError?: string | null;
+  cleanup?: ApiCleanupResult | null;
+  cleanupLoading?: boolean;
+  cleanupError?: string | null;
   onAnalyze?: (ticketId: number, repoIds: string[]) => void;
   onGeneratePrompt?: (ticketId: number, repoIds: string[], guidance?: string) => void;
 }>;
@@ -32,6 +36,9 @@ export function BugCard({
   analysisError = null,
   promptLoading = false,
   promptError = null,
+  cleanup = null,
+  cleanupLoading = false,
+  cleanupError = null,
   onAnalyze,
   onGeneratePrompt,
 }: BugCardProps) {
@@ -41,8 +48,6 @@ export function BugCard({
 
   const showRepoSelector = !bug.aiAnalysis && !analysisLoading && !analysisError;
   const showImplementationPrompt = !isBug && bug.aiAnalysis?.status === "ready";
-  const analysisPaneHasContent =
-    analysisLoading || analysisError || bug.aiAnalysis || showRepoSelector;
 
   return (
     <Card
@@ -51,55 +56,62 @@ export function BugCard({
       })}
     >
       <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
-        <Box
-          sx={{
-            display: "grid",
-            gridTemplateColumns: { xs: "1fr", lg: "minmax(0, 5fr) minmax(0, 4fr)" },
-            gap: { xs: 3, lg: 4 },
-            alignItems: "start",
-          }}
-        >
-          <Box sx={{ minWidth: 0 }}>
-            <Stack spacing={2}>
-              <BugDetails bug={bug} isDetailed />
-            </Stack>
-          </Box>
-
-          <Box sx={{ minWidth: 0 }}>
-            {analysisPaneHasContent ? (
+        <Stack spacing={3}>
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: { xs: "1fr", lg: "minmax(0, 1fr) minmax(0, 1fr)" },
+              gap: { xs: 3, lg: 3 },
+              alignItems: "start",
+            }}
+          >
+            <Box sx={{ minWidth: 0 }}>
               <Stack spacing={2}>
-                {showRepoSelector && (
-                  <RepoSelector
-                    analyzeLabel={isBug ? "Analyze Bug" : "Analyze Story"}
-                    onSelectionChange={setSelectedRepoIds}
-                    onAnalyze={(repoIds) => {
-                      setSelectedRepoIds(repoIds);
-                      onAnalyze?.(bug.id, repoIds);
-                    }}
-                    disabled={analysisLoading}
-                  />
-                )}
-
-                {analysisLoading && <AnalysisSkeleton />}
-
-                {analysisError && <ErrorMessage message={analysisError} />}
-
-                {bug.aiAnalysis && <AIAnalysis analysis={bug.aiAnalysis} />}
-
-                {showImplementationPrompt && (
-                  <ImplementationPrompt
-                    prompt={bug.implementationPrompt}
-                    loading={promptLoading}
-                    error={promptError}
-                    onGenerate={(guidance) =>
-                      onGeneratePrompt?.(bug.id, selectedRepoIds, guidance)
-                    }
-                  />
-                )}
+                <BugDetails bug={bug} isDetailed />
               </Stack>
-            ) : null}
+            </Box>
+
+            <Box sx={{ minWidth: 0 }}>
+              <CleanedContent
+                cleanup={cleanup}
+                loading={cleanupLoading}
+                error={cleanupError}
+                isBug={isBug}
+              />
+            </Box>
           </Box>
-        </Box>
+
+          <Stack spacing={2}>
+            {showRepoSelector && (
+              <RepoSelector
+                analyzeLabel={isBug ? "Analyze Bug" : "Analyze Story"}
+                onSelectionChange={setSelectedRepoIds}
+                onAnalyze={(repoIds) => {
+                  setSelectedRepoIds(repoIds);
+                  onAnalyze?.(bug.id, repoIds);
+                }}
+                disabled={analysisLoading}
+              />
+            )}
+
+            {analysisLoading && <AnalysisSkeleton />}
+
+            {analysisError && <ErrorMessage message={analysisError} />}
+
+            {bug.aiAnalysis && <AIAnalysis analysis={bug.aiAnalysis} />}
+
+            {showImplementationPrompt && (
+              <ImplementationPrompt
+                prompt={bug.implementationPrompt}
+                loading={promptLoading}
+                error={promptError}
+                onGenerate={(guidance) =>
+                  onGeneratePrompt?.(bug.id, selectedRepoIds, guidance)
+                }
+              />
+            )}
+          </Stack>
+        </Stack>
       </CardContent>
     </Card>
   );

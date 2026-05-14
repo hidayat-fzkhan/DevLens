@@ -1,5 +1,5 @@
 import { Box } from "@mui/material";
-import type { ApiTicket } from "../../types";
+import type { ApiCleanupResult, ApiTicket } from "../../types";
 import { Surface } from "../../ui/Surface";
 import { BugCard } from "./BugCard";
 import { BugListSkeleton } from "./BugListSkeleton";
@@ -14,6 +14,9 @@ type BugListProps = Readonly<{
   analysisError?: string | null;
   promptLoading?: boolean;
   promptError?: string | null;
+  cleanup?: ApiCleanupResult | null;
+  cleanupLoading?: boolean;
+  cleanupError?: string | null;
   onAnalyze?: (ticketId: number, repoIds: string[]) => void;
   onGeneratePrompt?: (ticketId: number, repoIds: string[], guidance?: string) => void;
 }>;
@@ -27,6 +30,9 @@ export function BugList({
   analysisError,
   promptLoading,
   promptError,
+  cleanup,
+  cleanupLoading,
+  cleanupError,
   onAnalyze,
   onGeneratePrompt,
 }: BugListProps) {
@@ -45,6 +51,9 @@ export function BugList({
         analysisError={analysisError}
         promptLoading={promptLoading}
         promptError={promptError}
+        cleanup={cleanup}
+        cleanupLoading={cleanupLoading}
+        cleanupError={cleanupError}
         onAnalyze={onAnalyze}
         onGeneratePrompt={onGeneratePrompt}
       />

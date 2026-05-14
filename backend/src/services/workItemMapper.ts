@@ -86,6 +86,7 @@ export function buildWorkItemResponse(workItem: AdoWorkItem) {
     resolvedDate: workItem.resolvedDate,
     resolvedBy: workItem.resolvedBy,
     resolvedReason: workItem.resolvedReason,
+    attachments: workItem.attachments,
     webUrl: workItem.webUrl,
     summary,
     description,

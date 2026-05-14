@@ -2,9 +2,10 @@ import { useCallback, useRef, useState } from "react";
 import {
   fetchImplementationPrompt,
   fetchTicketAnalysis,
+  fetchTicketCleanup,
   fetchTickets,
 } from "../services/api";
-import type { ApiTicket, TicketCategory } from "../types";
+import type { ApiCleanupResult, ApiTicket, TicketCategory } from "../types";
 
 export function useTickets(category: TicketCategory | null) {
   const [query, setQuery] = useState("");
@@ -14,6 +15,10 @@ export function useTickets(category: TicketCategory | null) {
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [promptLoading, setPromptLoading] = useState(false);
   const [promptError, setPromptError] = useState<string | null>(null);
+  const [cleanupLoading, setCleanupLoading] = useState(false);
+  const [cleanupError, setCleanupError] = useState<string | null>(null);
+  const [cleanup, setCleanup] = useState<ApiCleanupResult | null>(null);
+  const [cleanupTicketId, setCleanupTicketId] = useState<number | null>(null);
   const [tickets, setTickets] = useState<ApiTicket[]>([]);
   const [generatedAt, setGeneratedAt] = useState<string | null>(null);
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
@@ -21,6 +26,40 @@ export function useTickets(category: TicketCategory | null) {
   const abortControllerRef = useRef<AbortController | null>(null);
   const analysisAbortControllerRef = useRef<AbortController | null>(null);
   const promptAbortControllerRef = useRef<AbortController | null>(null);
+  const cleanupAbortControllerRef = useRef<AbortController | null>(null);
+
+  const loadCleanup = useCallback(
+    async (ticketId: number) => {
+      if (!category) return;
+
+      if (cleanupAbortControllerRef.current) {
+        cleanupAbortControllerRef.current.abort();
+      }
+
+      const controller = new AbortController();
+      cleanupAbortControllerRef.current = controller;
+      setCleanupLoading(true);
+      setCleanupError(null);
+      setCleanupTicketId(ticketId);
+
+      try {
+        const data = await fetchTicketCleanup(category, ticketId, controller.signal);
+        setCleanup(data.cleanup);
+      } catch (err) {
+        if (err instanceof Error && err.name === "AbortError") {
+          setCleanupError("Cleanup cancelled");
+        } else {
+          setCleanupError(err instanceof Error ? err.message : "Unknown cleanup error");
+        }
+      } finally {
+        setCleanupLoading(false);
+        if (cleanupAbortControllerRef.current === controller) {
+          cleanupAbortControllerRef.current = null;
+        }
+      }
+    },
+    [category],
+  );
 
   const runAnalysis = useCallback(
     async (ticketId: number, repoIds: string[]) => {
@@ -136,6 +175,9 @@ export function useTickets(category: TicketCategory | null) {
     if (promptAbortControllerRef.current) {
       promptAbortControllerRef.current.abort();
     }
+    if (cleanupAbortControllerRef.current) {
+      cleanupAbortControllerRef.current.abort();
+    }
 
     setLoading(false);
     setError(null);
@@ -143,6 +185,10 @@ export function useTickets(category: TicketCategory | null) {
     setAnalysisError(null);
     setPromptLoading(false);
     setPromptError(null);
+    setCleanupLoading(false);
+    setCleanupError(null);
+    setCleanup(null);
+    setCleanupTicketId(null);
     setTickets([]);
     setGeneratedAt(null);
     setSelectedTicketId(null);
@@ -201,6 +247,9 @@ export function useTickets(category: TicketCategory | null) {
     if (promptAbortControllerRef.current) {
       promptAbortControllerRef.current.abort();
     }
+    if (cleanupAbortControllerRef.current) {
+      cleanupAbortControllerRef.current.abort();
+    }
   };
 
   return {
@@ -212,6 +261,10 @@ export function useTickets(category: TicketCategory | null) {
     analysisError,
     promptLoading,
     promptError,
+    cleanup,
+    cleanupLoading,
+    cleanupError,
+    cleanupTicketId,
     tickets,
     selectedTicketId,
     generatedAt,
@@ -220,6 +273,7 @@ export function useTickets(category: TicketCategory | null) {
     reset,
     handleStop,
     runAnalysis,
+    loadCleanup,
     loadImplementationPrompt,
   };
 }
