@@ -51,14 +51,28 @@ export function buildRepoLabelSummary(repos: Repo[]): string {
   return repos.map((r) => `${r.owner}/${r.name}@${r.branch}`).join(", ");
 }
 
+function splitCsv(value: string | undefined): string[] {
+  if (!value) return [];
+  return value
+    .split(",")
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
+}
+
 export function buildRepoStackSummary(repos: Repo[]): string | undefined {
   const lines: string[] = [];
   for (const r of repos) {
-    const stackParts: string[] = [];
-    if (r.language) stackParts.push(r.language);
-    if (r.framework) stackParts.push(r.framework);
-    if (stackParts.length === 0) continue;
-    lines.push(`- ${r.owner}/${r.name} (branch ${r.branch}): ${stackParts.join(" / ")}`);
+    const languages = splitCsv(r.language);
+    const frameworks = splitCsv(r.framework);
+    if (languages.length === 0 && frameworks.length === 0) continue;
+    const parts: string[] = [];
+    if (languages.length > 0) {
+      parts.push(`${languages.length === 1 ? "language" : "languages"}: ${languages.join(", ")}`);
+    }
+    if (frameworks.length > 0) {
+      parts.push(`${frameworks.length === 1 ? "framework" : "frameworks"}: ${frameworks.join(", ")}`);
+    }
+    lines.push(`- ${r.owner}/${r.name} (branch ${r.branch}) — ${parts.join("; ")}`);
   }
   return lines.length > 0 ? lines.join("\n") : undefined;
 }

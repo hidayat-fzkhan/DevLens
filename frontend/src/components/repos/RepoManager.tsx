@@ -28,6 +28,14 @@ import {
 import type { Repo } from "../../types";
 import { useToast } from "../common/ToastProvider";
 
+function splitCsv(value: string | undefined): string[] {
+  if (!value) return [];
+  return value
+    .split(",")
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
+}
+
 export function RepoManager() {
   const { showToast } = useToast();
   const [repos, setRepos] = useState<Repo[]>([]);
@@ -316,22 +324,25 @@ export function RepoManager() {
                         <Typography variant="caption" color="text.secondary">
                           branch: {repo.branch}
                         </Typography>
-                        {repo.language && (
+                        {splitCsv(repo.language).map((v) => (
                           <Chip
-                            label={repo.language}
+                            key={`lang-${v}`}
+                            label={v}
                             size="small"
                             variant="outlined"
                             sx={{ height: 18, fontSize: "0.65rem" }}
                           />
-                        )}
-                        {repo.framework && (
+                        ))}
+                        {splitCsv(repo.framework).map((v) => (
                           <Chip
-                            label={repo.framework}
+                            key={`fw-${v}`}
+                            label={v}
                             size="small"
                             variant="outlined"
+                            color="primary"
                             sx={{ height: 18, fontSize: "0.65rem" }}
                           />
-                        )}
+                        ))}
                       </Stack>
                     </Box>
                     {!isEditing && (
