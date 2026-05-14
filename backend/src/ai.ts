@@ -144,6 +144,7 @@ export type AIAnalysisParams = {
   nonFunctionalRequirements?: string;
   repoContext?: string;
   repoBranch: string;
+  repoStack?: string;
   recentCommits: Array<{
     sha: string;
     message: string;
@@ -173,6 +174,7 @@ function buildBugPrompt(params: {
   reproSteps?: string;
   nonFunctionalRequirements?: string;
   repoBranch: string;
+  repoStack?: string;
   commitsText: string;
   repoContext?: string;
 }): { systemPrompt: string; prompt: string } {
@@ -181,6 +183,7 @@ function buildBugPrompt(params: {
       "You analyze production bugs using only the supplied ticket details, recent commits, and repo snippets.",
       "Return concise JSON only.",
       "Prefer concrete evidence from the provided commits and snippets.",
+      "When the repository stack is given, frame recommendations in that stack's idioms (libraries, file conventions, test frameworks).",
       "Do not speculate beyond the supplied context.",
     ].join(" "),
     prompt: [
@@ -191,6 +194,9 @@ function buildBugPrompt(params: {
       params.reproSteps ? `Repro steps: ${params.reproSteps}` : undefined,
       params.nonFunctionalRequirements
         ? `Non-functional requirements (APIs, services, constraints):\n${params.nonFunctionalRequirements}`
+        : undefined,
+      params.repoStack
+        ? `Repository stack:\n${params.repoStack}`
         : undefined,
       `Branch: ${params.repoBranch}`,
       `Recent commits:\n${params.commitsText || "None provided"}`,
@@ -220,6 +226,7 @@ function buildUserStoryPrompt(params: {
   acceptanceCriteria?: string;
   nonFunctionalRequirements?: string;
   repoBranch: string;
+  repoStack?: string;
   commitsText: string;
   repoContext?: string;
 }): { systemPrompt: string; prompt: string } {
@@ -229,6 +236,7 @@ function buildUserStoryPrompt(params: {
       "Return concise JSON only.",
       "Focus on implementation approach, impacted areas, dependencies, and practical next steps.",
       "Treat non-functional requirements as authoritative — they list the APIs, services, and constraints the implementation must use.",
+      "When the repository stack is given, frame the implementation approach in that stack's idioms (libraries, file conventions, test frameworks).",
       "Do not speculate beyond the supplied context.",
     ].join(" "),
     prompt: [
@@ -241,6 +249,9 @@ function buildUserStoryPrompt(params: {
         : undefined,
       params.nonFunctionalRequirements
         ? `Non-functional requirements (APIs, services, constraints, dependencies):\n${params.nonFunctionalRequirements}`
+        : undefined,
+      params.repoStack
+        ? `Repository stack:\n${params.repoStack}`
         : undefined,
       `Branch: ${params.repoBranch}`,
       `Recent commits:\n${params.commitsText || "None provided"}`,
@@ -306,6 +317,7 @@ export type ImplementationPromptParams = {
     dependencies?: string[];
   };
   repoBranch: string;
+  repoStack?: string;
   anthropicKey: string;
   anthropicModel: string;
   additionalGuidance?: string;
@@ -365,6 +377,9 @@ export async function generateImplementationPrompt(
     nonFunctionalRequirements
       ? `Non-functional requirements (APIs, services, constraints, dependencies — treat as authoritative):\n${nonFunctionalRequirements}`
       : undefined,
+    params.repoStack
+      ? `Repository stack (use these languages/frameworks for any code suggestions):\n${params.repoStack}`
+      : undefined,
     `Target branch: ${params.repoBranch}`,
     analysisContext
       ? `Prior AI analysis (use as additional context):\n${analysisContext}`
@@ -379,6 +394,7 @@ export async function generateImplementationPrompt(
       "- A clear, one-sentence task description",
       "- Which files or modules to create or modify (reference the codebase context if provided)",
       "- The specific APIs, services, and constraints listed in the non-functional requirements (if any) — name each one explicitly",
+      "- Idiomatic patterns for the repository stack (e.g. if it's a TypeScript/Express repo, use those conventions; do not invent unrelated technologies)",
       "- Any edge cases or additional non-functional concerns derived from the story",
       "- All acceptance criteria that the implementation must satisfy",
       "- The target branch name for the implementation",
@@ -461,6 +477,7 @@ export async function analyzeWithAI(
           reproSteps,
           nonFunctionalRequirements,
           repoBranch: params.repoBranch,
+          repoStack: params.repoStack,
           commitsText,
           repoContext,
         })
@@ -470,6 +487,7 @@ export async function analyzeWithAI(
           acceptanceCriteria,
           nonFunctionalRequirements,
           repoBranch: params.repoBranch,
+          repoStack: params.repoStack,
           commitsText,
           repoContext,
         });

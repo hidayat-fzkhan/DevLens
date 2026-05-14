@@ -10,8 +10,21 @@ export type Repo = {
   branch: string;
   owner: string;
   name: string;
+  language?: string;
+  framework?: string;
   addedAt: string;
 };
+
+export type RepoMetadataUpdate = {
+  language?: string | null;
+  framework?: string | null;
+};
+
+function cleanOptionalString(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
 
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
 const dataDir = path.resolve(moduleDir, "..", "data");
@@ -67,6 +80,8 @@ export async function listRepos(): Promise<Repo[]> {
 export async function addRepo(input: {
   url: string;
   branch: string;
+  language?: string;
+  framework?: string;
 }): Promise<Repo> {
   const url = normalizeUrl(input.url);
   const branch = input.branch.trim();
@@ -91,9 +106,33 @@ export async function addRepo(input: {
     branch,
     owner,
     name: repo,
+    language: cleanOptionalString(input.language),
+    framework: cleanOptionalString(input.framework),
     addedAt: new Date().toISOString(),
   };
   cache = [...repos, next];
+  await writeToDisk(cache);
+  return next;
+}
+
+export async function updateRepoMetadata(
+  id: string,
+  update: RepoMetadataUpdate,
+): Promise<Repo | undefined> {
+  const repos = await listRepos();
+  const idx = repos.findIndex((r) => r.id === id);
+  if (idx < 0) return undefined;
+
+  // PATCH semantics: undefined = leave alone, null/"" = clear, string = set.
+  const next: Repo = { ...repos[idx] };
+  if (update.language !== undefined) {
+    next.language = cleanOptionalString(update.language);
+  }
+  if (update.framework !== undefined) {
+    next.framework = cleanOptionalString(update.framework);
+  }
+
+  cache = [...repos.slice(0, idx), next, ...repos.slice(idx + 1)];
   await writeToDisk(cache);
   return next;
 }

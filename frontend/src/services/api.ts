@@ -91,6 +91,8 @@ export async function fetchRepos(signal?: AbortSignal): Promise<ApiReposResponse
 export async function addRepo(input: {
   url: string;
   branch: string;
+  language?: string;
+  framework?: string;
 }): Promise<ApiRepoResponse> {
   const base = getApiBase();
   const res = await fetch(`${base}/api/repos`, {
@@ -108,6 +110,23 @@ export async function addRepo(input: {
       // keep original message
     }
     throw new Error(message);
+  }
+  return (await res.json()) as ApiRepoResponse;
+}
+
+export async function updateRepoMetadata(
+  id: string,
+  input: { language?: string | null; framework?: string | null },
+): Promise<ApiRepoResponse> {
+  const base = getApiBase();
+  const res = await fetch(`${base}/api/repos/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(parseErrorBody(text, res.status));
   }
   return (await res.json()) as ApiRepoResponse;
 }

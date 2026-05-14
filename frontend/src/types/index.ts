@@ -131,6 +131,8 @@ export type Repo = {
   branch: string;
   owner: string;
   name: string;
+  language?: string;
+  framework?: string;
   addedAt: string;
 };
 

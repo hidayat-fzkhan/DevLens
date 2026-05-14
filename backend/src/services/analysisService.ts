@@ -51,6 +51,18 @@ export function buildRepoLabelSummary(repos: Repo[]): string {
   return repos.map((r) => `${r.owner}/${r.name}@${r.branch}`).join(", ");
 }
 
+export function buildRepoStackSummary(repos: Repo[]): string | undefined {
+  const lines: string[] = [];
+  for (const r of repos) {
+    const stackParts: string[] = [];
+    if (r.language) stackParts.push(r.language);
+    if (r.framework) stackParts.push(r.framework);
+    if (stackParts.length === 0) continue;
+    lines.push(`- ${r.owner}/${r.name} (branch ${r.branch}): ${stackParts.join(" / ")}`);
+  }
+  return lines.length > 0 ? lines.join("\n") : undefined;
+}
+
 export function buildAggregateHeadSha(commits: RepoCommit[], repos: Repo[]): string {
   const byRepo = new Map<string, string>();
   for (const commit of commits) {
@@ -225,6 +237,7 @@ export async function buildAiAnalysisForWorkItem(params: {
     .join("\n\n");
 
   const repoLabelSummary = buildRepoLabelSummary(params.repos);
+  const repoStackSummary = buildRepoStackSummary(params.repos);
   const countPerRepo = Math.max(
     4,
     Math.floor(
@@ -277,6 +290,7 @@ export async function buildAiAnalysisForWorkItem(params: {
     nonFunctionalRequirements,
     repoContext: undefined,
     repoBranch: repoLabelSummary,
+    repoStack: repoStackSummary,
     recentCommits: fastCommits,
     anthropicKey: params.cfg.anthropicKey,
     anthropicModel: params.cfg.anthropicModel,
@@ -324,6 +338,7 @@ export async function buildAiAnalysisForWorkItem(params: {
         nonFunctionalRequirements,
         repoContext,
         repoBranch: repoLabelSummary,
+        repoStack: repoStackSummary,
         recentCommits: commits.slice(0, 12).map((c) => ({
           sha: c.sha,
           message: c.message,

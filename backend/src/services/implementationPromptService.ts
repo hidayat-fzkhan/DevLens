@@ -8,6 +8,7 @@ import {
   buildAggregateHeadSha,
   buildCacheKey,
   buildRepoLabelSummary,
+  buildRepoStackSummary,
   fetchAggregatedCommits,
   fetchAggregatedRepoContext,
   getCachedAnalysis,
@@ -32,6 +33,7 @@ export async function buildImplementationPrompt(params: {
     : undefined;
 
   const repoLabelSummary = buildRepoLabelSummary(params.repos);
+  const repoStackSummary = buildRepoStackSummary(params.repos);
   const commits = await fetchAggregatedCommits({
     repos: params.repos,
     token: params.cfg.githubToken,
@@ -102,6 +104,7 @@ export async function buildImplementationPrompt(params: {
     repoContext,
     cachedAnalysis: cachedAnalysis ?? undefined,
     repoBranch: repoLabelSummary,
+    repoStack: repoStackSummary,
     anthropicKey: params.cfg.anthropicKey,
     anthropicModel: params.cfg.anthropicModel,
     additionalGuidance: params.additionalGuidance,
